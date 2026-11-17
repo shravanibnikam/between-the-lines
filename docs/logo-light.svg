@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-width="2" role="img" aria-label="Between the Lines">
+  <style>
+    .type { stroke-dasharray: 10; stroke-dashoffset: 10; animation: type 4s ease-in-out infinite; }
+    @keyframes type { 0%, 8% { stroke-dashoffset: 10; } 45%, 85% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 10; } }
+    @media (prefers-reduced-motion: reduce) { .type { animation: none; stroke-dashoffset: 0; } }
+  </style>
+  <path d="M4 6.5h16" stroke="#111827"/>
+  <path class="type" d="M4 12h10" stroke="#b8336a"/>
+  <path d="M4 17.5h16" stroke="#111827"/>
+</svg>

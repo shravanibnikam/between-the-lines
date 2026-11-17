@@ -1,0 +1,28 @@
+[package]
+name = "bookbinder-studio"
+version = "0.1.0"
+edition = "2021"
+description = "Between the Lines desktop app (Tauri)"
+license = "MIT"
+
+[lib]
+name = "bookbinder_studio_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+bookbinder-core = { path = "../../core" }
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Shipped binary: small and efficient. Not panic = "abort": core's Api::call relies on catch_unwind.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

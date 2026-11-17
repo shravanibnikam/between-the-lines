@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --manifest-path core/Cargo.toml
+      - run: cargo clippy --manifest-path core/Cargo.toml --all-targets -- -D warnings
+
+      # Export the sample book as every EPUB target and validate each one.
+      - name: Validate EPUB exports with epubcheck
+        env:
+          BOOKBINDER_DATA_DIR: ${{ runner.temp }}/bookbinder
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq epubcheck
+          cargo build --manifest-path core/Cargo.toml --example devserver
+          ./target/debug/examples/devserver &
+          until curl -s -o /dev/null 127.0.0.1:1421; do sleep 1; done
+          call() { curl -sf -X POST -H 'content-type: application/json' --data-binary @- 127.0.0.1:1421/call; }
+          book=$(echo '{"cmd":"sample_add","args":{}}' | call)
+          for kind in epub_kindle epub_apple epub_generic; do
+            file=$(jq -n --argjson b "$book" --arg k "$kind" '{cmd:"export",args:{book:$b,kind:$k}}' | call | jq -r .path)
+            epubcheck "$file"
+          done
+
+  studio:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: studio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: studio/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint
+      - run: npm test --if-present

@@ -1,0 +1,3 @@
+# Both Rust crates (core/ and studio/src-tauri/) share one build folder at the repo root.
+[build]
+target-dir = "target"

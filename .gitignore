@@ -1,0 +1,8 @@
+# Build output
+target/
+studio/node_modules/
+studio/dist/
+studio/src-tauri/target/
+studio/src-tauri/gen/
+*.tsbuildinfo
+.DS_Store
