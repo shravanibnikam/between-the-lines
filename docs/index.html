@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Between the Lines: free book formatting app for writers (print PDF and EPUB)</title>
+<meta name="description" content="Write your book, design its pages and publish it, free. Between the Lines is an open-source desktop app for macOS, Windows and Linux that turns a manuscript into a print-ready PDF and store-ready EPUBs. No subscription, no account, no AI.">
+<link rel="canonical" href="https://shravanibnikam.github.io/between-the-lines/">
+<meta name="theme-color" content="#18181b">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="site/favicon.svg" type="image/svg+xml">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Between the Lines">
+<meta property="og:title" content="Between the Lines: write, design and publish your book, free">
+<meta property="og:description" content="A free, open-source desktop app that turns your manuscript into a print-ready PDF and store-ready EPUBs. 17 book designs, real typesetting, no subscription, no AI.">
+<meta property="og:url" content="https://shravanibnikam.github.io/between-the-lines/">
+<meta property="og:image" content="https://shravanibnikam.github.io/between-the-lines/site/img/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="750">
+<meta property="og:image:alt" content="The Between the Lines editor in dark mode, with the chapter's printed pages beside it">
+<meta name="twitter:card" content="summary_large_image">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Between the Lines",
+  "description": "A free, open-source desktop app for indie writers that turns a manuscript into a print-ready PDF and store-ready EPUBs.",
+  "applicationCategory": "DesignApplication",
+  "operatingSystem": "macOS, Windows 10, Windows 11, Linux",
+  "softwareVersion": "0.1.0",
+  "license": "https://opensource.org/licenses/MIT",
+  "url": "https://shravanibnikam.github.io/between-the-lines/",
+  "downloadUrl": "https://github.com/shravanibnikam/between-the-lines/releases/latest",
+  "screenshot": "https://shravanibnikam.github.io/between-the-lines/site/img/og.jpg",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "Is it really free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. It is MIT licensed, with every design and every export format included. No licence key, no subscription and no paid tier." } },
+    { "@type": "Question", "name": "Does my manuscript leave my computer?", "acceptedAnswer": { "@type": "Answer", "text": "No. There is no account, no cloud, no AI and no telemetry. The app makes no network requests at all." } },
+    { "@type": "Question", "name": "Will print-on-demand services accept the files?", "acceptedAnswer": { "@type": "Answer", "text": "The print PDF embeds its fonts and can include bleed, and there is a PDF/X-1a option for printers such as IngramSpark. Pre-flight checks flag page-count and margin problems before you upload, and every EPUB passes EPUBCheck." } },
+    { "@type": "Question", "name": "Why does my computer warn me the first time I open it?", "acceptedAnswer": { "@type": "Answer", "text": "The app is not signed with a paid developer certificate yet. On macOS, open System Settings, Privacy and Security, and click Open Anyway. On Windows, click More info, then Run anyway." } },
+    { "@type": "Question", "name": "Can I bring in a book I wrote in Word?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Word (.docx), OpenDocument (.odt), Markdown and plain text all import, and footnotes and endnotes come across as footnotes." } },
+    { "@type": "Question", "name": "Is there any AI in it?", "acceptedAnswer": { "@type": "Answer", "text": "No, and there will not be. The words are yours; the app only sets them." } }
+  ]
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Source+Code+Pro:wght@400;500;600&display=swap">
+<link rel="preload" as="image" href="site/img/write-dark.webp" type="image/webp">
+<link rel="stylesheet" href="site/style.css">
+<script>document.documentElement.classList.add('js')</script>
+<script src="site/main.js" defer></script>
+<script src="site/critters.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <a class="nav-mark" href="./" aria-label="Between the Lines, home">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke-linecap="round" stroke-width="2.2"><path d="M4 6.5h16" stroke="currentColor"/><path d="M4 12h10" stroke="var(--brand)"/><path d="M4 17.5h16" stroke="currentColor"/></svg>
+    <span>Between the Lines</span>
+  </a>
+  <nav aria-label="Sections">
+    <a href="#features">Features</a>
+    <a href="#designs">Designs</a>
+    <a href="#faq">Questions</a>
+    <a href="https://github.com/shravanibnikam/between-the-lines">GitHub</a>
+  </nav>
+  <a class="btn btn-sm" href="#download" data-dl-primary>Download</a>
+</header>
+
+<main id="main">
+
+<!-- Hero: the logo, enlarged. Two lines of the name, and the raspberry line typing between them. -->
+<section class="hero" aria-labelledby="title">
+  <div class="name-block">
+    <h1 id="title" class="name">
+      <span class="mask"><span class="rise">Between</span></span>
+      <span class="mask l2"><span class="rise r2">the Lines</span></span>
+    </h1>
+    <div class="carriage">
+      <label class="sr" for="line">Type an opening line for your book</label>
+      <input id="line" class="line" type="text" autocomplete="off" spellcheck="false" maxlength="140" value="On the morning the Tamsel turned around, Iske Varrow was selling her last good compass.">
+      <span class="head" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="hint" aria-hidden="true">Click the line and write your own</span>
+    </div>
+  </div>
+  <div class="hero-foot">
+    <p class="lede">A free desktop app that turns your manuscript into a print-ready PDF and store-ready EPUBs. No subscription, no account, no AI.</p>
+    <div class="hero-actions">
+      <a class="btn" href="https://github.com/shravanibnikam/between-the-lines/releases/latest" data-dl-primary>Download free</a>
+      <a class="link" href="#download"><span data-version>Version 0.1.0</span> for macOS, Windows and Linux</a>
+    </div>
+  </div>
+</section>
+
+<!-- The plate: the product, set as type from the book's own prose, then printed as you scroll. -->
+<section class="plate-sec" aria-labelledby="plate-h" data-reveal>
+  <div class="plate-head">
+    <h2 id="plate-h" class="r">See the printed page while you write</h2>
+    <p class="r">Every chapter shows where it lands in print, "Pages 12–19 of 214", and updates as you type. The type is set in Rust with whole-paragraph line breaking, the method behind TeX.</p>
+  </div>
+  <figure class="plate r" data-plate>
+    <div class="plate-img">
+      <img src="site/img/write-dark.webp" width="2880" height="1800" alt="The Write screen in dark mode: the chapter outline, the editor, and the chapter's printed pages beside it" fetchpriority="high">
+    </div>
+  </figure>
+  <dl class="figures">
+    <div class="r"><dt>Price, for good</dt><dd>$0</dd><p>MIT licensed. Every design and export format included.</p></div>
+    <div class="r"><dt>Network requests</dt><dd>0</dd><p>No account, no cloud, no telemetry. Your manuscript stays on your computer.</p></div>
+    <div class="r"><dt>Book designs</dt><dd>17</dd><p>Each with open-licence fonts and its own ornaments.</p></div>
+    <div class="r"><dt>Export formats</dt><dd>5</dd><p>Print PDF, large print, and EPUBs for Kindle, Apple Books and other stores.</p></div>
+  </dl>
+</section>
+
+<section id="features" class="features" aria-labelledby="feat-h" data-reveal>
+  <h2 id="feat-h" class="r">Built for the long middle of a book</h2>
+
+  <article class="mod" data-reveal>
+    <figure class="panel r"><img src="site/img/lands.webp" width="576" height="560" loading="lazy" alt="Where this chapter lands in print: pages 1–2 of 6, with both typeset pages shown"><figcaption class="tag"><span>Live</span><span>Pages 1–2 of 6</span></figcaption></figure>
+    <div class="mod-text">
+      <h3 class="r">Where this chapter lands in print</h3>
+      <p class="r">The editor knows its page numbers. The chapter's real typeset pages sit beside you, so you watch a scene grow from two pages to five as you write it.</p>
+      <p class="r soft">Spell checking, daily and book word goals, and snapshots of the whole book are built in.</p>
+    </div>
+  </article>
+
+  <article class="mod" data-reveal>
+    <figure class="panel r"><img src="screenshots/typewriter.gif" width="960" height="307" loading="lazy" alt="Typing in Focus and Typewriter mode: words roll in under a warm lamp toward the type guide"><figcaption class="tag"><span>Focus + Typewriter</span><span>Lamp on</span></figcaption></figure>
+    <div class="mod-text">
+      <h3 class="r">Typewriter, Dim and Focus</h3>
+      <p class="r">Typewriter keeps your line a third of the way down the screen. Dim fades every paragraph but the one you're writing. Focus clears everything but the page.</p>
+      <p class="r soft">Put Focus and Typewriter together and the page becomes a lamp-lit sheet on a carriage, with adjustable lamp warmth and an optional typewriter face.</p>
+    </div>
+  </article>
+
+  <article class="mod" data-reveal>
+    <figure class="panel r"><img src="site/img/themes.webp" width="720" height="878" loading="lazy" alt="Design theme cards: Classic fiction, Literary, Thriller, Romance, Epic fantasy, Romantasy and more"><figcaption class="tag"><span>Design</span><span>17 themes</span></figcaption></figure>
+    <div class="mod-text">
+      <h3 class="r">17 designs, every setting adjustable</h3>
+      <p class="r">Classic fiction to romantasy, gothic, sci-fi, memoir and poetry, plus large print and a dyslexia-friendly design. Each ships with open-licence fonts and its own ornaments.</p>
+      <p class="r soft">Tune fonts, sizes, spacing, margins and chapter openings against a live two-page spread.</p>
+    </div>
+  </article>
+
+  <article class="mod" data-reveal>
+    <figure class="panel r"><img src="site/img/preflight.webp" width="2253" height="1234" loading="lazy" alt="Export screen: pre-flight checks for page count, title and inside margin, then print PDF and EPUB formats"><figcaption class="tag"><span>Export</span><span>Pre-flight</span></figcaption></figure>
+    <div class="mod-text">
+      <h3 class="r">Checks before you publish</h3>
+      <p class="r">Pre-flight flags what print-on-demand services reject: page count, inside margins, a missing title or author.</p>
+      <p class="r soft">Then export a print PDF with optional bleed or PDF/X-1a, a large-print edition, and EPUBs for Kindle, Apple Books and other stores. Every EPUB passes EPUBCheck.</p>
+    </div>
+  </article>
+
+  <article class="mod" data-reveal>
+    <figure class="panel r"><img src="site/img/world-crop.webp" width="2400" height="1500" loading="lazy" alt="World notes: a character entry with aliases and mentions counted per chapter"><figcaption class="tag"><span>World notes</span><span>Mentions per chapter</span></figcaption></figure>
+    <div class="mod-text">
+      <h3 class="r">Your world, in one place</h3>
+      <p class="r">Notes on characters, places, objects, groups and lore. Names and aliases are counted in every chapter they appear in.</p>
+      <p class="r soft">The spell checker always accepts them, so Iske Varrow never gets a red squiggle.</p>
+    </div>
+  </article>
+</section>
+
+<!-- The live thing: the chapter opening, set in each of the app's 17 designs. -->
+<section id="designs" class="designs" aria-labelledby="des-h" data-reveal>
+  <div class="page-stage r">
+    <div class="page-wrap" data-ui><div class="page" data-page aria-live="polite"></div></div>
+    <p class="tag page-spec" data-spec>Epic fantasy · EB Garamond 12 pt · 6 × 9 in</p>
+  </div>
+  <div class="des-side">
+    <h2 id="des-h" class="r">Set your first page in 17 designs</h2>
+    <p class="r">Pick a design and rename the chapter. This is the opening the app sets, in the same open-licence fonts. The first line is whatever you typed at the top of this page.</p>
+    <div class="chips r" role="group" aria-label="Book designs" data-chips></div>
+    <label class="field r"><span>Chapter title</span><input type="text" data-title value="The River That Climbed" maxlength="48" autocomplete="off"></label>
+    <div class="cells r">
+      <a class="cell cell-ink" href="#download">Download free</a>
+      <button class="cell" type="button" data-next>Next design</button>
+    </div>
+  </div>
+</section>
+
+<section class="how" aria-labelledby="how-h" data-reveal>
+  <h2 id="how-h" class="r">From draft to bookshop file</h2>
+  <div class="stage">
+    <p class="r"><b>To begin,</b> bring your manuscript in from Word (.docx), OpenDocument (.odt), Markdown or plain text. Footnotes and endnotes come across as footnotes, and every book waits on your bookshelf with its word count and streak.</p>
+    <figure class="ev r"><img src="site/img/bookshelf.webp" width="2880" height="1800" loading="lazy" alt="The bookshelf: the current book's cover, word counts and writing streak"></figure>
+  </div>
+  <div class="stage">
+    <p class="r"><b>While you write,</b> the editor handles bold and italic for you. A few Markdown-style lines cover the rest: headings, block quotes, scene breaks, images with captions, tables and footnotes.</p>
+    <figure class="ev r"><img src="site/img/write.webp" width="2880" height="1800" loading="lazy" alt="The Write screen in light mode"></figure>
+  </div>
+  <div class="stage">
+    <p class="r"><b>When it's ready,</b> page through the print, large-print and phone-ebook versions, run the pre-flight checks, and export.</p>
+    <figure class="ev r"><img src="site/img/preview.webp" width="2880" height="1800" loading="lazy" alt="Preview of the book's title page with page thumbnails"></figure>
+  </div>
+  <div class="stage">
+    <p class="r"><b>And afterwards,</b> every book is a plain folder on your own computer, so it's easy to back up and never locked in.</p>
+<pre class="ev tree r" aria-label="A book's folder"><code>Between the Lines/
+└─ Where the Rivers Run Upward/
+   ├─ book.json
+   ├─ images/
+   ├─ exports/
+   └─ snapshots/</code></pre>
+  </div>
+</section>
+
+<section id="faq" class="faq" aria-labelledby="faq-h" data-reveal>
+  <h2 id="faq-h" class="q r">Questions</h2>
+  <dl>
+    <div class="qa r"><dt class="q">Is it really free?</dt><dd>Yes. It's MIT licensed, with every design and every export format included. No licence key, no subscription and no paid tier.</dd></div>
+    <div class="qa r"><dt class="q">Does my manuscript leave my computer?</dt><dd>No. There's no account, no cloud, no AI and no telemetry. The app makes no network requests at all.</dd></div>
+    <div class="qa r"><dt class="q">Will print-on-demand services accept the files?</dt><dd>The print PDF embeds its fonts and can include bleed, and there's a PDF/X-1a option for printers such as IngramSpark. Pre-flight checks flag page-count and margin problems before you upload, and every EPUB passes EPUBCheck.</dd></div>
+    <div class="qa r"><dt class="q">Why does my computer warn me the first time?</dt><dd>The app isn't signed with a paid developer certificate yet. On macOS, open System Settings → Privacy &amp; Security and click Open Anyway. On Windows, click More info, then Run anyway.</dd></div>
+    <div class="qa r"><dt class="q">Can I bring in a book I wrote in Word?</dt><dd>Yes. Word (.docx), OpenDocument (.odt), Markdown and plain text all import, and footnotes and endnotes come across as footnotes.</dd></div>
+    <div class="qa r"><dt class="q">Is there any AI in it?</dt><dd>No, and there won't be. The words are yours; the app only sets them.</dd></div>
+  </dl>
+</section>
+
+<section id="download" class="download" aria-labelledby="dl-h" data-reveal>
+  <h2 id="dl-h" class="close r"><span>Go write</span> <span>the book.</span></h2>
+  <p class="dl-sub r"><span data-version>Version 0.1.0</span>, free for macOS, Windows and Linux. The app asks once before its first launch.</p>
+  <div class="oses">
+    <div class="os r" data-os="mac">
+      <h3>macOS</h3>
+      <p class="os-for">Apple silicon and Intel</p>
+      <a class="btn btn-row" data-asset="dmg" href="https://github.com/shravanibnikam/between-the-lines/releases/latest/download/Between.the.Lines_0.1.0_universal.dmg">Download .dmg <span data-size="dmg">23 MB</span></a>
+      <p class="os-step">Drag the app to Applications and open it. If macOS says it can't check the app, open System Settings → Privacy &amp; Security and click <b>Open Anyway</b>.</p>
+    </div>
+    <div class="os r" data-os="win">
+      <h3>Windows</h3>
+      <p class="os-for">Windows 10 and 11</p>
+      <a class="btn btn-row" data-asset="exe" href="https://github.com/shravanibnikam/between-the-lines/releases/latest/download/Between.the.Lines_0.1.0_x64-setup.exe">Download installer <span data-size="exe">9.5 MB</span></a>
+      <a class="alt" data-asset="msi" href="https://github.com/shravanibnikam/between-the-lines/releases/latest/download/Between.the.Lines_0.1.0_x64_en-US.msi">or the .msi <span data-size="msi">12.3 MB</span></a>
+      <p class="os-step">If SmartScreen says "Windows protected your PC", click <b>More info</b>, then <b>Run anyway</b>.</p>
+    </div>
+    <div class="os r" data-os="linux">
+      <h3>Linux</h3>
+      <p class="os-for">Any distribution</p>
+      <a class="btn btn-row" data-asset="appimage" href="https://github.com/shravanibnikam/between-the-lines/releases/latest/download/Between.the.Lines_0.1.0_amd64.AppImage">Download AppImage <span data-size="appimage">90 MB</span></a>
+      <a class="alt" data-asset="deb" href="https://github.com/shravanibnikam/between-the-lines/releases/latest/download/Between.the.Lines_0.1.0_amd64.deb">.deb for Debian and Ubuntu <span data-size="deb">12.5 MB</span></a>
+      <a class="alt" data-asset="rpm" href="https://github.com/shravanibnikam/between-the-lines/releases/latest/download/Between.the.Lines-0.1.0-1.x86_64.rpm">.rpm for Fedora <span data-size="rpm">12.5 MB</span></a>
+      <p class="os-step">Make the AppImage executable with <code>chmod +x</code>, then run it.</p>
+    </div>
+  </div>
+  <p class="dl-more r">Prefer to build it yourself? <a href="https://github.com/shravanibnikam/between-the-lines#build-from-source">Build from source</a> with Rust and Node, or see <a href="https://github.com/shravanibnikam/between-the-lines/releases">every release</a>.</p>
+</section>
+
+</main>
+
+<footer class="foot">
+  <canvas class="mark-ascii" role="img" aria-label="Between the Lines" data-ascii-mark></canvas>
+  <p class="mark-fallback" aria-hidden="true">Between the Lines</p>
+  <div class="foot-row">
+    <ul class="places">
+      <li><a href="https://github.com/shravanibnikam/between-the-lines">Source on GitHub</a></li>
+      <li><a href="https://github.com/shravanibnikam/between-the-lines/issues">Report a bug</a></li>
+      <li><a href="https://github.com/shravanibnikam/between-the-lines/blob/main/CONTRIBUTING.md">Contribute</a></li>
+    </ul>
+    <ul class="small-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#designs">Designs</a></li>
+      <li><a href="#faq">Questions</a></li>
+      <li><a href="#download">Download</a></li>
+      <li><a href="https://github.com/shravanibnikam/between-the-lines/blob/main/MECHANICS.md">How the typesetting works</a></li>
+      <li><a href="https://github.com/shravanibnikam/between-the-lines/blob/main/LICENSE">MIT licence</a></li>
+    </ul>
+  </div>
+  <div class="legal">
+    <p>Free and open source under the MIT licence. Bundled fonts under the SIL Open Font License. Books you make are entirely yours.</p>
+    <a href="#main">Back to top</a>
+  </div>
+</footer>
+
+<dialog class="lb" aria-labelledby="lb-title" data-lb>
+  <div class="lb-media"><img alt="" data-lb-img></div>
+  <div class="lb-side">
+    <div class="lb-top"><span class="lb-count" data-lb-count>1 / 9</span><button class="lb-x" type="button" aria-label="Close" data-lb-close><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="lb-body">
+      <h2 id="lb-title" data-lb-title></h2>
+      <p data-lb-text></p>
+      <div class="lb-actions"><a class="btn" href="#download" data-dl-primary data-lb-close>Download free</a><a class="btn btn-ghost" href="https://github.com/shravanibnikam/between-the-lines">View source</a></div>
+      <p class="lb-meta" data-lb-meta></p>
+    </div>
+    <div class="lb-nav"><button type="button" data-lb-prev>← Previous</button><button type="button" data-lb-next>Next →</button></div>
+  </div>
+</dialog>
+</body>
+</html>

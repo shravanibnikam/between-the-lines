@@ -9,3 +9,6 @@ studio/src-tauri/gen/
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# Design-check output
+.taste-skill/
