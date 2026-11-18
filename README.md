@@ -215,8 +215,10 @@ cd studio && npm test
 
 ```sh
 BOOKBINDER_DATA_DIR=/tmp/btl-dev cargo run --manifest-path core/Cargo.toml --example devserver
-cd studio && npm run dev     # then open http://localhost:1420
+cd studio && npm run dev
 ```
+
+The devserver prints a per-run URL, `http://localhost:1420/#dev_token=...`. Open that one: every call needs the token. Set `BOOKBINDER_DEV_TOKEN` to pick your own.
 
 ## Roadmap
 

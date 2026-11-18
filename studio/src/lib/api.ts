@@ -8,12 +8,23 @@ import type {
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const DEV_URL = 'http://127.0.0.1:1421/call'
 
+/** Dev-server token: from the `#dev_token=` URL the devserver prints, kept for reloads. */
+function devToken(): string {
+  try {
+    const t = new URLSearchParams(location.hash.slice(1)).get('dev_token')
+    if (t) sessionStorage.setItem('dev_token', t)
+    return t ?? sessionStorage.getItem('dev_token') ?? ''
+  } catch {
+    return new URLSearchParams(location.hash.slice(1)).get('dev_token') ?? ''
+  }
+}
+
 async function call<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
   if (inTauri) {
     const { invoke } = await import('@tauri-apps/api/core')
     return invoke<T>('call', { cmd, args })
   }
-  const res = await fetch(DEV_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cmd, args }) })
+  const res = await fetch(DEV_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cmd, args, token: devToken() }) })
   const body = await res.json()
   if (!res.ok) throw new Error(typeof body === 'string' ? body : JSON.stringify(body))
   return body as T
