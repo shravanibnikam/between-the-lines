@@ -61,6 +61,12 @@ pub fn path(book: &str, name: &str) -> Option<PathBuf> {
 
 fn open(book: &str, name: &str) -> Result<std::fs::File, String> {
     let p = path(book, name).ok_or("That image name isn't valid.")?;
+    // a link in images/ (or images/ itself as a link) could point anywhere, so it's refused
+    let file_ok = std::fs::symlink_metadata(&p).map(|m| m.is_file()).unwrap_or(false);
+    let dir_ok = std::fs::symlink_metadata(storage::images_dir(book)).map(|m| m.is_dir()).unwrap_or(false);
+    if !file_ok || !dir_ok {
+        return Err("That image wasn't found.".into());
+    }
     let f = std::fs::File::open(p).map_err(|_| "That image wasn't found.".to_string())?;
     let m = f.metadata().map_err(|e| e.to_string())?;
     if !m.is_file() {
@@ -250,6 +256,7 @@ mod tests {
 
     #[test]
     fn names() {
+        storage::tests::setup(); // images_dir must not change under the test
         for ok in ["a.png", "Photo_2-1.jpg", "x.JPEG", "a.b.png"] {
             assert!(valid_name(ok), "{ok}");
         }
@@ -274,6 +281,19 @@ mod tests {
         assert_eq!((r.w, r.h, r.channels, r.pixels.len()), (40, 30, 3, 40 * 30 * 3));
         assert!(decode(b"GIF89a").is_err() && header_dims(&mut &b"\xFF\xD8\xFF\xD9"[..]).is_none());
         assert!(decode(&png[..png.len() / 2]).is_err() && decode(&JPG[..200]).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn linked_images_are_refused() {
+        storage::tests::setup();
+        let dir = storage::images_dir("img-link");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.png"), test_png(2, 2, false)).unwrap();
+        let _ = std::fs::remove_file(dir.join("b.png"));
+        std::os::unix::fs::symlink(dir.join("a.png"), dir.join("b.png")).unwrap();
+        assert!(kind("img-link", "a.png").is_some() && kind("img-link", "b.png").is_none());
+        let _ = std::fs::remove_dir_all(storage::book_dir("img-link"));
     }
 
     #[test]

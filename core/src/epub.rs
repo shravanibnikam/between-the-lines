@@ -239,6 +239,14 @@ fn css(book: &Book, fonts: &[(String, String, bool, bool)]) -> String {
         "Sans serif" => "sans-serif",
         _ => "serif",
     };
+    // the style goes into CSS as written: only bundled families and #rrggbb colours, falling
+    // back the way the preview does
+    let fam = |f: &str| crate::fonts::faces()[crate::fonts::face_index(f, false, false)].family;
+    let col = |c: &str| {
+        let [r, g, b] = crate::layout::hex_rgb(c);
+        format!("#{r:02x}{g:02x}{b:02x}")
+    };
+    let (body_font, heading_font, number_font) = (fam(&st.body_font), fam(&st.heading_font), fam(&st.number_font));
     c.push_str(&format!(
         "body {{ font-family: \"{bf}\", {bs}; line-height: {lh}; margin: 0 1em; }}\n\
 p {{ margin: 0; text-indent: {ind}em; text-align: {align}; margin-top: {pg}em; }}\n\
@@ -280,27 +288,27 @@ thead th {{ border-bottom: 1px solid; }}\n\
 th.c, td.c {{ text-align: center; }} th.r, td.r {{ text-align: right; }}\n\
 sup {{ font-size: 0.7em; line-height: 0; }}\n\
 aside.footnote {{ font-size: 0.85em; margin-top: 1em; }} aside.footnote p {{ text-indent: 0; }}\n",
-        bf = st.body_font,
-        bs = serif(&st.body_font),
+        bf = body_font,
+        bs = serif(body_font),
         lh = st.line_height,
         ind = st.first_indent_em,
         pg = st.paragraph_spacing_em,
         sink = (st.sink_lines * 0.5).clamp(0.0, 8.0),
         gap = st.opener_gap_em.clamp(0.5, 6.0),
-        nf = st.number_font,
-        ns = serif(&st.number_font),
+        nf = number_font,
+        ns = serif(number_font),
         ns_em = st.number_scale,
-        ncol = st.number_color,
+        ncol = col(&st.number_color),
         nupper = if st.number_uppercase { "text-transform: uppercase; letter-spacing: 0.12em;" } else { "" },
-        hf = st.heading_font,
-        hs = serif(&st.heading_font),
+        hf = heading_font,
+        hs = serif(heading_font),
         ts_em = st.title_scale,
-        tcol = st.title_color,
+        tcol = col(&st.title_color),
         tupper = if st.title_uppercase { "text-transform: uppercase; letter-spacing: 0.06em;" } else { "" },
         titalic = if st.title_italic { "font-style: italic;" } else { "" },
         orn_h = (1.4 * st.ornament_scale).clamp(0.6, 4.0),
         dcs = (st.drop_cap_lines.clamp(2, 5) as f32 * 1.05 + 0.4),
-        dccol = st.drop_cap_color,
+        dccol = col(&st.drop_cap_color),
     ));
     c
 }
@@ -751,6 +759,19 @@ mod tests {
         let ps = assert_well_formed(&write(&b, EbookTarget::Generic).unwrap().bytes);
         let nav = &ps.iter().find(|p| p.0.ends_with("nav.xhtml")).unwrap().1;
         assert!(!nav.contains("front-00") && nav.contains("chapter-001"));
+    }
+
+    #[test]
+    fn css_keeps_only_known_fonts_and_hex_colours() {
+        let mut b = Book::default();
+        b.style.body_font = "x\"; } body { display: none; } p { a: \"".into();
+        b.style.title_color = "red; } * { color: red".into();
+        b.style.number_color = "#ABC".into();
+        b.style.drop_cap_color = "#8a6d3b".into();
+        let c = css(&b, &[]);
+        assert!(!c.contains("display: none") && !c.contains("color: red"), "{c}");
+        assert!(c.contains(&format!("font-family: \"{}\"", crate::fonts::faces()[0].family)));
+        assert!(c.contains("color: #1a1a1a") && c.contains("color: #aabbcc") && c.contains("color: #8a6d3b"));
     }
 
     #[test]

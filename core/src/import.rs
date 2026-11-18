@@ -2,7 +2,7 @@
 //! Chapters are found from heading styles, or from lines such as "Chapter 3" or "Prologue".
 
 use crate::model::{Section, SectionKind};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::Path;
 
@@ -40,7 +40,11 @@ pub fn import_file(path: &Path) -> Result<Imported, String> {
 
 /// File text and whether the Latin-1 fallback was used. Handles UTF-8 (with or without BOM) and UTF-16.
 fn read_text(path: &Path) -> Result<(String, bool), String> {
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let mut bytes = Vec::new();
+    std::fs::File::open(path).and_then(|f| f.take(MAX_ENTRY + 1).read_to_end(&mut bytes)).map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > MAX_ENTRY {
+        return Err("That file is too large to import.".into());
+    }
     Ok(decode_text(bytes))
 }
 
@@ -436,16 +440,24 @@ pub fn import_markdown(text: &str) -> Imported {
 // ---------------------------------------------------------------------------------------------
 
 const MAX_ENTRY: u64 = 64 * 1024 * 1024;
+/// All the parts one import reads, together.
+const MAX_PARTS: u64 = 128 * 1024 * 1024;
+/// Footnote text after copying it for every reference to it.
+const MAX_NOTES: usize = 64 * 1024 * 1024;
 
-/// A zip entry as text: `Ok(None)` when it's missing or isn't text, an error when it's over 64 MB.
-fn zip_text(archive: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Result<Option<String>, String> {
+/// A zip entry as text: `Ok(None)` when it's missing or isn't text, an error when it's over 64 MB
+/// or over what's left of `budget` (which it uses up).
+fn zip_text(archive: &mut zip::ZipArchive<std::fs::File>, name: &str, budget: &mut u64) -> Result<Option<String>, String> {
     let Ok(f) = archive.by_name(name) else { return Ok(None) };
+    let cap = MAX_ENTRY.min(*budget);
     let mut buf = Vec::new();
-    if f.take(MAX_ENTRY + 1).read_to_end(&mut buf).is_err() {
-        return Ok(None);
-    }
-    if buf.len() as u64 > MAX_ENTRY {
+    let read = f.take(cap + 1).read_to_end(&mut buf);
+    if buf.len() as u64 > cap {
         return Err("That document is too large to import.".into());
+    }
+    *budget -= buf.len() as u64;
+    if read.is_err() {
+        return Ok(None);
     }
     Ok(String::from_utf8(buf).ok())
 }
@@ -501,14 +513,15 @@ fn merge_runs(runs: Vec<(String, bool, bool)>) -> String {
 pub fn import_docx(path: &Path) -> Result<Imported, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut ar = zip::ZipArchive::new(file).map_err(|_| "That doesn't look like a Word document.".to_string())?;
-    let doc = zip_text(&mut ar, "word/document.xml")?.ok_or("The Word document has no text part.")?;
-    let styles = zip_text(&mut ar, "word/styles.xml")?.unwrap_or_default();
-    let core = zip_text(&mut ar, "docProps/core.xml")?.unwrap_or_default();
+    let mut budget = MAX_PARTS;
+    let doc = zip_text(&mut ar, "word/document.xml", &mut budget)?.ok_or("The Word document has no text part.")?;
+    let styles = zip_text(&mut ar, "word/styles.xml", &mut budget)?.unwrap_or_default();
+    let core = zip_text(&mut ar, "docProps/core.xml", &mut budget)?.unwrap_or_default();
     let mut notes: Vec<String> = Vec::new();
     // note text by key: the footnote's w:id, or "e" and the endnote's
     let mut note_text: HashMap<String, String> = HashMap::new();
     for (part, prefix) in [("word/footnotes.xml", ""), ("word/endnotes.xml", "e")] {
-        let xml = zip_text(&mut ar, part)?.unwrap_or_default();
+        let xml = zip_text(&mut ar, part, &mut budget)?.unwrap_or_default();
         if let Ok(x) = roxmltree::Document::parse(&xml) {
             // separators carry a w:type; real notes don't
             for n in x.descendants().filter(|n| matches!(n.tag_name().name(), "footnote" | "endnote") && attr(n, "type").is_none()) {
@@ -550,13 +563,19 @@ pub fn import_docx(path: &Path) -> Result<Imported, String> {
     }
     let mut ps: Vec<P> = Vec::new();
     let (mut toc_skipped, mut boxes) = (0, 0);
+    // content controls holding a table-of-contents gallery, found once rather than per paragraph
+    let mut toc_sdts = HashSet::new();
+    for g in x.descendants().filter(|g| g.tag_name().name() == "docPartGallery" && attr(g, "val").map(|v| v.to_lowercase().contains("table of contents")).unwrap_or(false)) {
+        for a in g.ancestors().filter(|a| a.tag_name().name() == "sdt") {
+            if !toc_sdts.insert(a.id()) {
+                break; // its outer ones are in already
+            }
+        }
+    }
     boxes += body.descendants().filter(|n| n.tag_name().name() == "txbxContent" && !n.ancestors().any(|a| a.tag_name().name() == "Fallback")).count();
     // only top-level paragraphs: text boxes hold nested ones (and mc:Fallback repeats them)
     for p in body.descendants().filter(|n| n.tag_name().name() == "p" && !n.ancestors().skip(1).any(|a| a.tag_name().name() == "p")) {
-        let in_toc_block = p.ancestors().any(|a| {
-            a.tag_name().name() == "sdt"
-                && a.descendants().any(|g| g.tag_name().name() == "docPartGallery" && attr(&g, "val").map(|v| v.to_lowercase().contains("table of contents")).unwrap_or(false))
-        });
+        let in_toc_block = p.ancestors().any(|a| toc_sdts.contains(&a.id()));
         let mut toc_style = false;
         let mut level = None;
         let mut title_style = false;
@@ -630,6 +649,9 @@ pub fn import_docx(path: &Path) -> Result<Imported, String> {
     if endnotes > 0 {
         notes.push(format!("Endnotes became footnotes ({endnotes})."));
     }
+    if refs.iter().fold(0usize, |n, r| n.saturating_add(note_text[r].len())) > MAX_NOTES {
+        return Err("That document has too many footnotes to import.".into());
+    }
     let texts: Vec<String> = refs.iter().map(|r| note_text[r].clone()).collect();
     append_notes(&mut sections, &texts);
     Ok(Imported { title, author, sections, notes })
@@ -673,12 +695,30 @@ fn docx_runs(p: roxmltree::Node, notes: &HashMap<String, String>, refs: &mut Vec
     runs
 }
 
-/// Add note `i` as a `[^i+1]: text` line at the end of the section that refers to it.
+/// Add note `i` as a `[^i+1]: text` line at the end of the first section that refers to it.
 fn append_notes(sections: &mut [Section], texts: &[String]) {
+    // one pass over the text: the first section holding each `[^n]`
+    let mut home: Vec<Option<usize>> = vec![None; texts.len()];
+    for (si, s) in sections.iter().enumerate() {
+        let b = s.text.as_bytes();
+        let mut i = 0;
+        while let Some(off) = s.text[i..].find("[^") {
+            let start = i + off + 2;
+            let mut end = start;
+            while end < b.len() && b[end].is_ascii_digit() {
+                end += 1;
+            }
+            if end > start && b[start] != b'0' && b.get(end) == Some(&b']') {
+                if let Some(h) = s.text[start..end].parse::<usize>().ok().and_then(|n| home.get_mut(n - 1)) {
+                    h.get_or_insert(si);
+                }
+            }
+            i = start;
+        }
+    }
     for (i, text) in texts.iter().enumerate() {
-        let label = format!("[^{}]", i + 1);
-        if let Some(s) = sections.iter_mut().find(|s| s.text.contains(&label)) {
-            s.text.push_str(&format!("\n{label}: {text}"));
+        if let Some(si) = home[i] {
+            sections[si].text.push_str(&format!("\n[^{}]: {text}", i + 1));
         }
     }
 }
@@ -690,7 +730,7 @@ fn append_notes(sections: &mut [Section], texts: &[String]) {
 pub fn import_odt(path: &Path) -> Result<Imported, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut ar = zip::ZipArchive::new(file).map_err(|_| "That doesn't look like an OpenDocument file.".to_string())?;
-    let content = zip_text(&mut ar, "content.xml")?.ok_or("The document has no text part.")?;
+    let content = zip_text(&mut ar, "content.xml", &mut { MAX_PARTS })?.ok_or("The document has no text part.")?;
     let x = roxmltree::Document::parse(&content).map_err(|e| format!("The document couldn't be read: {e}"))?;
     // automatic styles: name -> (bold, italic)
     let mut fmt: std::collections::HashMap<String, (bool, bool)> = std::collections::HashMap::new();
@@ -985,6 +1025,35 @@ mod tests {
         assert!(t.starts_with("a ") && t.contains("b[^1]\nPart I think") && t.ends_with("\n[^1]: fn"), "{t}");
         assert!(t.len() < 200);
         assert!(r.notes.iter().all(|n| !n.contains("Footnotes")), "{:?}", r.notes);
+    }
+
+    #[test]
+    fn docx_note_copies_and_parts_are_capped() {
+        // one 1 MB footnote referred to 65 times would copy 65 MB of note text
+        let refs = "<w:r><w:footnoteReference w:id=\"1\"/></w:r>".repeat(65);
+        let doc = format!("<w:document {W}><w:body><w:p><w:r><w:t>x</w:t></w:r>{refs}</w:p></w:body></w:document>");
+        let foot = format!("<w:footnotes {W}><w:footnote w:id=\"1\"><w:p><w:r><w:t>{}</w:t></w:r></w:p></w:footnote></w:footnotes>", "n".repeat(1024 * 1024));
+        let e = import_file(&zip_file("refs.docx", &[("word/document.xml", &doc), ("word/footnotes.xml", &foot)])).err().unwrap();
+        assert!(e.contains("too many footnotes"), "{e}");
+        // the parts of one import share a budget
+        let path = zip_file("budget.docx", &[("a", &"a".repeat(20)), ("b", &"b".repeat(20))]);
+        let mut ar = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+        let mut budget = 30;
+        assert_eq!(zip_text(&mut ar, "a", &mut budget).unwrap().as_deref(), Some("a".repeat(20).as_str()));
+        assert!(zip_text(&mut ar, "b", &mut budget).is_err());
+    }
+
+    #[test]
+    fn notes_go_to_the_first_section_naming_them() {
+        let mut ss: Vec<Section> = ["a[^01] [^2", "b[^10] [^1] x[^2]", "[^2]"]
+            .iter()
+            .map(|t| Section { text: t.to_string(), ..Section::new(SectionKind::Chapter, "") })
+            .collect();
+        let texts: Vec<String> = (1..=11).map(|n| format!("n{n}")).collect();
+        append_notes(&mut ss, &texts);
+        assert_eq!(ss[0].text, "a[^01] [^2");
+        assert_eq!(ss[1].text, "b[^10] [^1] x[^2]\n[^1]: n1\n[^2]: n2\n[^10]: n10");
+        assert_eq!(ss[2].text, "[^2]");
     }
 
     #[test]

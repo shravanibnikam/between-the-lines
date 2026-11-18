@@ -416,7 +416,7 @@ fn end_to_end() {
     ] {
         let r = ok(&api, "export", json!({ "book": book, "kind": kind }));
         let path = PathBuf::from(r["path"].as_str().unwrap());
-        assert!(path.starts_with(storage::exports_dir(&id)), "{path:?}");
+        assert!(path.starts_with(storage::exports_dir(&id).unwrap()), "{path:?}");
         assert!(r["name"].as_str().unwrap().ends_with(suffix), "{} vs {suffix}", r["name"]);
         assert!(r["name"].as_str().unwrap().starts_with("Edge Cases 1"), "{}", r["name"]);
         let bytes = std::fs::read(&path).unwrap();

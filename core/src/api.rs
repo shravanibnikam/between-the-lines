@@ -478,9 +478,10 @@ impl Api {
                 let id: String = arg(a, "id")?;
                 existing(&id)?;
                 let mut v: Vec<(u64, Value)> = Vec::new();
-                for e in std::fs::read_dir(storage::exports_dir(&id)).map_err(|e| e.to_string())?.flatten() {
+                for e in std::fs::read_dir(storage::exports_dir(&id)?).map_err(|e| e.to_string())?.flatten() {
+                    // metadata() doesn't follow links, so a link is skipped
                     let Ok(m) = e.metadata() else { continue };
-                    if m.is_file() {
+                    if m.is_file() && storage::is_export_name(&e.file_name().to_string_lossy()) {
                         let modified = secs(m.modified());
                         v.push((modified, json!({ "name": e.file_name().to_string_lossy(), "path": e.path(), "bytes": m.len(), "modified": modified })));
                     }
@@ -490,11 +491,22 @@ impl Api {
             }
             "copy_file" => {
                 let (src, dest): (String, String) = (arg(a, "src")?, arg(a, "dest")?);
-                let root = std::fs::canonicalize(storage::app_dir()).map_err(|e| e.to_string())?;
-                let src = std::fs::canonicalize(&src).map_err(|e| format!("Couldn't find that file: {e}"))?;
-                if !src.starts_with(&root) {
-                    return Err("Only files in the Between the Lines folder can be copied.".into());
+                // only a book's export, exactly as exports_list names it: <book>/exports/<name>
+                let src = Path::new(&src);
+                let name = src.file_name().and_then(|n| n.to_str()).filter(|n| storage::is_export_name(n));
+                let id = src.parent().and_then(Path::parent).and_then(Path::file_name).and_then(|n| n.to_str());
+                let is_export = match (id, name) {
+                    (Some(id), Some(name)) => existing(id).is_ok() && storage::exports_dir(id).map(|d| d.join(name) == src).unwrap_or(false),
+                    _ => false,
+                };
+                if !is_export {
+                    return Err("Only exported books can be copied.".into());
                 }
+                let m = std::fs::symlink_metadata(src).map_err(|e| format!("Couldn't find that file: {e}"))?;
+                if !m.is_file() {
+                    return Err("Only exported books can be copied.".into());
+                }
+                let root = std::fs::canonicalize(storage::app_dir()).map_err(|e| e.to_string())?;
                 let dest = std::path::Path::new(&dest);
                 if !dest.is_absolute() {
                     return Err("The copy needs a full destination path.".into());
@@ -506,7 +518,9 @@ impl Api {
                 if dest.is_dir() || dest.file_name().is_none() {
                     return Err("The destination is a folder, not a file.".into());
                 }
-                std::fs::copy(&src, dest).map_err(|e| format!("Couldn't save the copy: {e}"))?;
+                let bytes = std::fs::read(src).map_err(|e| format!("Couldn't read that file: {e}"))?;
+                // a new file renamed into place, so a link at dest is replaced, not written through
+                storage::write_atomic(dest, &bytes).map_err(|e| format!("Couldn't save the copy: {e}"))?;
                 Ok(Value::Null)
             }
             "image_add" => {

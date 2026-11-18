@@ -9,11 +9,17 @@
     "dialog:allow-save",
     {
       "identifier": "opener:allow-open-path",
-      "allow": [{ "path": "$DATA/Between the Lines/**" }]
+      "allow": [
+        { "path": "$DATA/Between the Lines/books/*/exports/*.pdf" },
+        { "path": "$DATA/Between the Lines/books/*/exports/*.epub" }
+      ]
     },
     {
       "identifier": "opener:allow-reveal-item-in-dir",
-      "allow": [{ "path": "$DATA/Between the Lines/**" }]
+      "allow": [
+        { "path": "$DATA/Between the Lines/books/*/exports/*.pdf" },
+        { "path": "$DATA/Between the Lines/books/*/exports/*.epub" }
+      ]
     }
   ]
 }
