@@ -17,7 +17,7 @@ EPUBs. No subscription, no paywall, no AI. Your words stay on your computer.
 ![Platforms](https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-1d1f20)
 ![Built with Rust and Tauri](https://img.shields.io/badge/built%20with-Rust%20%2B%20Tauri-1d1f20)
 
-[Features](#features) · [Get started](#get-started) · [How it works](#how-it-works) · [Contributing](CONTRIBUTING.md)
+**[Website](https://shravanibnikam.github.io/between-the-lines/)** · [Features](#features) · [Get started](#get-started) · [How it works](#how-it-works) · [Contributing](CONTRIBUTING.md)
 
 <br>
 
@@ -149,7 +149,7 @@ rest is a few Markdown-style lines:
 
 ## Get started
 
-Download the latest version from the [Releases page](https://github.com/shravanibnikam/between-the-lines/releases/latest):
+Download the latest version from the [website](https://shravanibnikam.github.io/between-the-lines/#download), which picks the right file for your system, or from the [Releases page](https://github.com/shravanibnikam/between-the-lines/releases/latest):
 
 | System | File |
 |---|---|
