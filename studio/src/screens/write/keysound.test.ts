@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { strokeFor, voice, weight } from './keysound.ts'
+import { keyParts, strokeFor, voice, weight } from './keysound.ts'
 
 const key = (k: string, mods: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; isComposing?: boolean } = {}) =>
   strokeFor({ key: k, ctrlKey: false, metaKey: false, altKey: false, isComposing: false, ...mods })
@@ -32,4 +32,15 @@ test('capitals strike harder and small marks lighter', () => {
   assert.ok(weight('A') > weight('a'))
   assert.ok(weight('.') < weight('a'))
   assert.equal(weight('7'), 1)
+})
+
+test('each key keeps its own strike, release and pitch, and the keyboard uses many of them', () => {
+  assert.deepEqual(keyParts('KeyA'), keyParts('KeyA'))
+  const letters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((c) => keyParts(`Key${c}`))
+  for (const p of letters) {
+    assert.ok(p.rate >= 0.94 && p.rate <= 1.06)
+    assert.ok(p.strike[1] > 0.1 && p.release[1] > 0.1)
+  }
+  assert.ok(new Set(letters.map((p) => p.strike[0])).size >= 6)
+  assert.ok(new Set(letters.map((p) => p.release[0])).size >= 4)
 })

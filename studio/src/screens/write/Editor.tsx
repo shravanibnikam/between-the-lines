@@ -21,7 +21,7 @@ import { fontStack } from '@/lib/fonts'
 import type { Area, Section } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/state/context'
-import { playStroke, strokeFor } from './keysound'
+import { playRelease, playStroke, preloadSounds, strokeFor } from './keysound'
 import { fromBlocks, toLines } from './markup'
 import { spellKey, WriteDecorations } from './plugins'
 
@@ -240,17 +240,23 @@ export function EditorColumn({ section, area, index, misspelled, onAddWord, onIg
     }
   }, [editor, typewriter, carriage])
 
-  // Typewriter sounds: each key typed in the text makes its own sound.
+  // Typewriter sounds: each key typed in the text makes its own sound, going down and coming up.
   const sound = typewriter && settings.typewriter_sound
   useEffect(() => {
     if (!editor || !sound) return
+    preloadSounds()
     const dom = editor.view.dom
-    const onKey = (e: KeyboardEvent) => {
+    const onDown = (e: KeyboardEvent) => {
       const s = strokeFor(e)
       if (s && editor.isEditable) playStroke(s, e.code, e.key)
     }
-    dom.addEventListener('keydown', onKey)
-    return () => dom.removeEventListener('keydown', onKey)
+    const onUp = (e: KeyboardEvent) => playRelease(e.code)
+    dom.addEventListener('keydown', onDown)
+    dom.addEventListener('keyup', onUp)
+    return () => {
+      dom.removeEventListener('keydown', onDown)
+      dom.removeEventListener('keyup', onUp)
+    }
   }, [editor, sound])
 
   // Carriage: slide the text so the caret sits mid-screen on the rail; typing hides the toolbar.
