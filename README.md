@@ -50,7 +50,8 @@ updates as you type, with spell checking, daily and book word goals, and snapsho
 Three switches in the editor toolbar, which you can combine however you like:
 
 - **Typewriter:** the line you're typing stays a third of the way down the screen, so your eyes
-  never chase the cursor to the bottom of the page.
+  never chase the cursor to the bottom of the page. Each key clacks like a typewriter's, with a
+  bell and carriage return on Enter. Turn this off with **Sound**.
 - **Dim:** every paragraph except the one you're writing fades back, so the sentence in front of
   you is the only thing asking for attention.
 - **Focus:** the sidebar, outline and panels disappear, leaving just you and the page. Turn on
@@ -155,7 +156,7 @@ Download the latest version from the [website](https://shravanibnikam.github.io/
 |---|---|
 | macOS (Apple silicon and Intel) | `Between.the.Lines_…_universal.dmg` |
 | Windows 10 and 11 | `Between.the.Lines_…_x64-setup.exe` (or the `.msi`) |
-| Linux | `.AppImage` (any distribution), `.deb` (Debian, Ubuntu) or `.rpm` (Fedora) |
+| Linux | `.flatpak` or `.AppImage` (any distribution), `.deb` (Debian, Ubuntu) or `.rpm` (Fedora) |
 
 The app isn't signed with a paid developer certificate yet, so your system asks once before the
 first launch:
@@ -166,6 +167,18 @@ first launch:
 - **Windows:** if SmartScreen says "Windows protected your PC", click **More info**, then
   **Run anyway**.
 - **Linux:** make the AppImage executable (`chmod +x Between.the.Lines_*.AppImage`) and run it.
+
+**On Linux, the Flatpak is the easiest way in** (releases after 0.1.0 include one). It adds the app
+to your menu with its icon, and it has no network access at all:
+
+```sh
+flatpak install --user Between.the.Lines_*_x86_64.flatpak   # or double-click it in GNOME Software
+flatpak run app.betweenthelines.studio                       # or open it from your app menu
+```
+
+Flatpak fetches the GNOME runtime it needs from Flathub the first time. The `.deb` and `.rpm` also
+add a menu entry and icon. The AppImage runs without installing, but your desktop won't show its
+icon. Every package keeps your books in the same folder, so you can switch between them.
 
 ### Build from source
 
@@ -182,6 +195,9 @@ npm install
 ./run.sh build        # release build, then open the app in target/release/bundle/
 ./run.sh dev          # or run it with hot reload while you work on it
 ```
+
+On Linux, `studio/flatpak/build.sh` then packages that release build as a Flatpak (it needs
+`flatpak` and `flatpak install flathub org.gnome.Platform//51`).
 
 Books are saved in your system's app data folder:
 `~/Library/Application Support/Between the Lines` on macOS, `~/.local/share/Between the Lines` on
@@ -215,12 +231,14 @@ cd studio && npm test
 
 ```sh
 BOOKBINDER_DATA_DIR=/tmp/btl-dev cargo run --manifest-path core/Cargo.toml --example devserver
-cd studio && npm run dev     # then open http://localhost:1420
+cd studio && npm run dev
 ```
+
+The devserver prints a per-run URL, `http://localhost:1420/#dev_token=...`. Open that one: every call needs the token. Set `BOOKBINDER_DEV_TOKEN` to pick your own.
 
 ## Roadmap
 
-Ideas for future versions, with no dates promised: signed installers, series, version branches,
+Ideas for future versions, with no dates promised: signed installers, a Flathub listing, series, version branches,
 cover templates with spine-width calculation, and more hyphenation and spelling languages. AI
 features are deliberately not on the list.
 

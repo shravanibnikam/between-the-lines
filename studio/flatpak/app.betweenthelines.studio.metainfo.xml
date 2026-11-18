@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.betweenthelines.studio</id>
+  <name>Between the Lines</name>
+  <summary>Write and format books, offline</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <developer id="io.github.shravanibnikam">
+    <name>The Between the Lines contributors</name>
+  </developer>
+  <description>
+    <p>A desktop app for indie writers that turns a manuscript into a print-ready PDF and store-ready EPUBs. No subscription, no paywall, no AI. Your words stay on your computer.</p>
+    <ul>
+      <li>Write in chapters with typewriter, dim and focus modes</li>
+      <li>Design the pages with themes, trims, fonts and ornaments</li>
+      <li>Import Word, OpenDocument, Markdown and plain text manuscripts</li>
+      <li>Export print PDFs, large print and EPUBs for every store</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">app.betweenthelines.studio.desktop</launchable>
+  <url type="homepage">https://github.com/shravanibnikam/between-the-lines</url>
+  <url type="bugtracker">https://github.com/shravanibnikam/between-the-lines/issues</url>
+  <categories>
+    <category>Office</category>
+    <category>WordProcessor</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-18"/>
+  </releases>
+</component>

@@ -4,13 +4,16 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   core:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo test --manifest-path core/Cargo.toml
       - run: cargo clippy --manifest-path core/Cargo.toml --all-targets -- -D warnings
 
@@ -19,12 +22,13 @@ jobs:
       - name: Validate EPUB exports with epubcheck
         env:
           BOOKBINDER_DATA_DIR: ${{ runner.temp }}/bookbinder
+          BOOKBINDER_DEV_TOKEN: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq epubcheck
           cargo build --manifest-path core/Cargo.toml --example devserver
           ./target/debug/examples/devserver &
           until curl -s -o /dev/null 127.0.0.1:1421; do sleep 1; done
-          call() { curl -sf -X POST -H 'content-type: application/json' --data-binary @- 127.0.0.1:1421/call; }
+          call() { jq -c --arg t "$BOOKBINDER_DEV_TOKEN" '. + {token: $t}' | curl -sf -X POST -H 'content-type: application/json' --data-binary @- 127.0.0.1:1421/call; }
           book=$(echo '{"cmd":"sample_add","args":{}}' | call)
           pics=$(echo '{"cmd":"sample_add","args":{}}' | call)
           add() { jq -n --argjson b "$pics" --arg p "$PWD/core/tests/$1" '{cmd:"image_add",args:{book:$b.id,path:$p}}' | call | jq -r .name; }
@@ -45,8 +49,8 @@ jobs:
       run:
         working-directory: studio
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm

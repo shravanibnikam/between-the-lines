@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Between the Lines
+Comment=Write and format books, offline
+Exec=bookbinder-studio
+Icon=app.betweenthelines.studio
+StartupWMClass=bookbinder-studio
+Terminal=false
+Categories=Office;WordProcessor;
+Keywords=book;novel;writing;manuscript;typesetting;PDF;EPUB;

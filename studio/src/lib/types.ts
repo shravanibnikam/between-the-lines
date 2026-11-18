@@ -102,6 +102,7 @@ export interface ImportResult { book: Book; notes: string[] }
 export interface Settings {
   dark: boolean; sample_created: boolean; editor_size: number; last_book: string | null
   typewriter: boolean; dim_others: boolean; lamp_brightness: number; lamp_warmth: number; typewriter_font: boolean
+  typewriter_sound: boolean
   accent: string
 }
 

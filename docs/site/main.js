@@ -41,7 +41,7 @@
   setPrimary();
 
   /* ---------- The latest release, so links and sizes stay current ---------- */
-  const MATCH = { dmg: /universal\.dmg$/, exe: /-setup\.exe$/, msi: /\.msi$/, appimage: /\.AppImage$/, deb: /\.deb$/, rpm: /\.rpm$/ };
+  const MATCH = { dmg: /universal\.dmg$/, exe: /-setup\.exe$/, msi: /\.msi$/, appimage: /\.AppImage$/, deb: /\.deb$/, rpm: /\.rpm$/, flatpak: /\.flatpak$/ };
   const mb = n => (n / 1e6 >= 20 ? Math.round(n / 1e6) : (n / 1e6).toFixed(1)) + ' MB';
   fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } })
     .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
@@ -51,7 +51,7 @@
       for (const [key, re] of Object.entries(MATCH)) {
         const asset = (rel.assets || []).find(x => re.test(x.name));
         if (!asset) continue;
-        $$(`[data-asset="${key}"]`).forEach(a => (a.href = asset.browser_download_url));
+        $$(`[data-asset="${key}"]`).forEach(a => { a.href = asset.browser_download_url; a.hidden = false; }); // the Flatpak link is hidden until a release has one
         $$(`[data-size="${key}"]`).forEach(s => (s.textContent = mb(asset.size)));
       }
       setPrimary();

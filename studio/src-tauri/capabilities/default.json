@@ -5,15 +5,26 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-destroy",
     "dialog:allow-open",
     "dialog:allow-save",
     {
       "identifier": "opener:allow-open-path",
-      "allow": [{ "path": "$DATA/Between the Lines/**" }]
+      "allow": [
+        { "path": "$DATA/Between the Lines/books/*/exports/*.pdf" },
+        { "path": "$DATA/Between the Lines/books/*/exports/*.epub" },
+        { "path": "$HOME/.local/share/Between the Lines/books/*/exports/*.pdf" },
+        { "path": "$HOME/.local/share/Between the Lines/books/*/exports/*.epub" }
+      ]
     },
     {
       "identifier": "opener:allow-reveal-item-in-dir",
-      "allow": [{ "path": "$DATA/Between the Lines/**" }]
+      "allow": [
+        { "path": "$DATA/Between the Lines/books/*/exports/*.pdf" },
+        { "path": "$DATA/Between the Lines/books/*/exports/*.epub" },
+        { "path": "$HOME/.local/share/Between the Lines/books/*/exports/*.pdf" },
+        { "path": "$HOME/.local/share/Between the Lines/books/*/exports/*.epub" }
+      ]
     }
   ]
 }

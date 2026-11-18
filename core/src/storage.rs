@@ -2,6 +2,7 @@
 
 use crate::model::Book;
 use serde::{Deserialize, Serialize};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// App data folder; `BOOKBINDER_DATA_DIR` overrides it (used by tests).
@@ -9,15 +10,23 @@ pub fn app_dir() -> PathBuf {
     if let Some(d) = std::env::var_os("BOOKBINDER_DATA_DIR").filter(|d| !d.is_empty()) {
         return PathBuf::from(d);
     }
-    let base = dirs::data_dir().unwrap_or_else(std::env::temp_dir);
-    let dir = base.join(APP_NAME);
-    // The app used to be called Bookbinder: move an existing library across once, and keep
-    // using the old folder if it can't be moved so no books go missing.
-    let old = base.join("Bookbinder");
-    if !dir.exists() && old.is_dir() && std::fs::rename(&old, &dir).is_err() {
-        return old;
-    }
-    dir
+    // worked out once per run, so two first calls can't race the move below
+    static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| {
+        // In the Flatpak $XDG_DATA_HOME is the sandbox's own folder. The sandbox is given
+        // ~/.local/share/Between the Lines (studio/flatpak/build.sh), so every package shares one library.
+        let flatpak = std::env::var_os("FLATPAK_ID").and_then(|_| dirs::home_dir()).map(|h| h.join(".local/share"));
+        let base = flatpak.or_else(dirs::data_dir).or_else(dirs::home_dir).unwrap_or_else(|| PathBuf::from("."));
+        let dir = base.join(APP_NAME);
+        // The app used to be called Bookbinder: move an existing library across once, and keep
+        // using the old folder if it can't be moved so no books go missing.
+        let old = base.join("Bookbinder");
+        if !dir.exists() && old.is_dir() && std::fs::rename(&old, &dir).is_err() {
+            return old;
+        }
+        dir
+    })
+    .clone()
 }
 
 pub const APP_NAME: &str = "Between the Lines";
@@ -50,10 +59,8 @@ pub fn book_path(id: &str) -> PathBuf {
     book_dir(id).join("book.json")
 }
 
-pub fn exports_dir(id: &str) -> PathBuf {
-    let d = book_dir(id).join("exports");
-    let _ = std::fs::create_dir_all(&d);
-    d
+pub fn exports_dir(id: &str) -> Result<PathBuf, String> {
+    plain_dir(book_dir(id).join("exports"), "exports")
 }
 
 /// The book's pictures (its cover and the images in its text); made when the first is added.
@@ -61,10 +68,18 @@ pub fn images_dir(id: &str) -> PathBuf {
     book_dir(id).join("images")
 }
 
-pub fn snapshots_dir(id: &str) -> PathBuf {
-    let d = book_dir(id).join("snapshots");
-    let _ = std::fs::create_dir_all(&d);
-    d
+pub fn snapshots_dir(id: &str) -> Result<PathBuf, String> {
+    plain_dir(book_dir(id).join("snapshots"), "snapshots")
+}
+
+/// Make the folder if it's missing; a link or anything else that isn't a folder is refused.
+fn plain_dir(d: PathBuf, what: &str) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+    if std::fs::symlink_metadata(&d).map(|m| m.is_dir()).unwrap_or(false) {
+        Ok(d)
+    } else {
+        Err(format!("The book's {what} folder isn't a normal folder."))
+    }
 }
 
 /// Write to a uniquely named temporary file next to `path` and flush it to disk.
@@ -84,7 +99,8 @@ fn write_tmp(path: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
     Ok(tmp)
 }
 
-fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+/// Replace `path` (a link there is replaced, not followed).
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let tmp = write_tmp(path, bytes)?;
     std::fs::rename(&tmp, path).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
@@ -128,9 +144,24 @@ pub fn list() -> Vec<Summary> {
     out
 }
 
+/// Largest book file read or saved.
+const MAX_BOOK: u64 = 256 * 1024 * 1024;
+
+/// A book file's bytes: only a regular file (not a pipe or device), up to 256 MB.
+fn read_file(path: &Path) -> Result<Vec<u8>, String> {
+    if !std::fs::metadata(path).map_err(|e| e.to_string())?.is_file() {
+        return Err("This book file isn't a normal file.".into());
+    }
+    let mut buf = Vec::new();
+    std::fs::File::open(path).and_then(|f| f.take(MAX_BOOK + 1).read_to_end(&mut buf)).map_err(|e| e.to_string())?;
+    if buf.len() as u64 > MAX_BOOK {
+        return Err("This book file is too large to open.".into());
+    }
+    Ok(buf)
+}
+
 fn read_book(path: &Path) -> Result<Book, String> {
-    let s = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    serde_json::from_str::<Book>(&s).map_err(|e| format!("This book file couldn't be read: {e}"))
+    serde_json::from_slice::<Book>(&read_file(path)?).map_err(|e| format!("This book file couldn't be read: {e}"))
 }
 
 /// Load a book file; falls back to the `.bak` copy next to it. For `<folder>/book.json` the
@@ -159,9 +190,12 @@ pub fn save(book: &Book) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join("book.json");
     let json = serde_json::to_string_pretty(book).map_err(|e| e.to_string())?;
+    if json.len() as u64 > MAX_BOOK {
+        return Err("This book is too large to save.".into());
+    }
     let tmp = write_tmp(&path, json.as_bytes())?;
-    if path.exists() {
-        let _ = std::fs::copy(&path, dir.join("book.json.bak"));
+    if let Ok(cur) = read_file(&path) {
+        let _ = write_atomic(&dir.join("book.json.bak"), &cur);
     }
     std::fs::rename(&tmp, &path).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
@@ -192,7 +226,7 @@ pub fn save_snapshot(book: &Book, name: &str) -> Result<(), String> {
     check_id(&book.id)?;
     let when = crate::model::now_secs();
     let file = format!("{when}-{}.json", crate::model::new_id());
-    let dir = snapshots_dir(&book.id);
+    let dir = snapshots_dir(&book.id)?;
     let json = serde_json::to_string(book).map_err(|e| e.to_string())?;
     let mut list = snapshots(&book.id); // before the new file exists, so re-indexing doesn't list it twice
     write_atomic(&dir.join(&file), json.as_bytes())?;
@@ -204,8 +238,8 @@ pub fn snapshots(id: &str) -> Vec<Snapshot> {
     if !valid_id(id) {
         return Vec::new();
     }
-    let dir = snapshots_dir(id);
-    if let Some(list) = std::fs::read_to_string(dir.join("index.json")).ok().and_then(|s| serde_json::from_str(&s).ok()) {
+    let Ok(dir) = snapshots_dir(id) else { return Vec::new() };
+    if let Some(list) = read_file(&dir.join("index.json")).ok().and_then(|s| serde_json::from_slice(&s).ok()) {
         return list;
     }
     // missing or unreadable index: re-create it from the snapshot files
@@ -228,7 +262,7 @@ pub fn load_snapshot(id: &str, file: &str) -> Result<Book, String> {
     if Path::new(file).file_name().and_then(|n| n.to_str()) != Some(file) || !file.ends_with(".json") {
         return Err("That snapshot isn't valid.".into());
     }
-    let mut b = read_book(&snapshots_dir(id).join(file))?;
+    let mut b = read_book(&snapshots_dir(id)?.join(file))?;
     b.id = id.to_string();
     Ok(b)
 }
@@ -249,6 +283,8 @@ pub struct Settings {
     pub lamp_warmth: f32,
     /// Write in a typewriter-style (monospaced) face.
     pub typewriter_font: bool,
+    /// With Typewriter on, keys make typewriter sounds.
+    pub typewriter_sound: bool,
     /// Interface accent preset (see studio/src/index.css); unknown names fall back to raspberry.
     pub accent: String,
 }
@@ -265,6 +301,7 @@ impl Default for Settings {
             lamp_brightness: 0.8,
             lamp_warmth: 0.6,
             typewriter_font: true,
+            typewriter_sound: true,
             accent: "raspberry".into(),
         }
     }
@@ -272,7 +309,7 @@ impl Default for Settings {
 
 pub fn load_settings() -> Settings {
     let p = app_dir().join("settings.json");
-    std::fs::read_to_string(p).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+    read_file(&p).ok().and_then(|s| serde_json::from_slice(&s).ok()).unwrap_or_default()
 }
 
 pub fn save_settings(s: &Settings) {
@@ -286,9 +323,15 @@ pub fn write_export(id: &str, file_name: &str, bytes: &[u8]) -> Result<PathBuf, 
     if Path::new(file_name).file_name().and_then(|n| n.to_str()) != Some(file_name) {
         return Err("That file name isn't valid.".into());
     }
-    let p = exports_dir(id).join(file_name);
-    std::fs::write(&p, bytes).map_err(|e| e.to_string())?;
+    let p = exports_dir(id)?.join(file_name);
+    write_atomic(&p, bytes)?;
     Ok(p)
+}
+
+/// Exported books: a plain file name ending in .pdf or .epub.
+pub fn is_export_name(name: &str) -> bool {
+    let l = name.to_ascii_lowercase();
+    Path::new(name).file_name().and_then(|n| n.to_str()) == Some(name) && (l.ends_with(".pdf") || l.ends_with(".epub"))
 }
 
 /// Save a new image in the book's images folder; an existing one is never replaced.
@@ -297,9 +340,7 @@ pub fn add_image(id: &str, name: &str, bytes: &[u8]) -> Result<PathBuf, String> 
     if !crate::image::valid_name(name) {
         return Err("That image name isn't valid.".into());
     }
-    let dir = images_dir(id);
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let p = dir.join(name);
+    let p = plain_dir(images_dir(id), "images")?.join(name);
     if p.exists() {
         return Err("An image with that name is already in the book.".into());
     }
@@ -396,11 +437,33 @@ pub(crate) mod tests {
         assert_eq!(load_snapshot("snap-book", &l[0].file).unwrap().meta.title, "Snap");
         assert_eq!(load_snapshot("snap-book", &l[1].file).unwrap().meta.title, "Snap two");
         // a broken index is rebuilt from the files instead of losing the history
-        std::fs::write(snapshots_dir("snap-book").join("index.json"), "garbage").unwrap();
+        std::fs::write(snapshots_dir("snap-book").unwrap().join("index.json"), "garbage").unwrap();
         assert_eq!(snapshots("snap-book").len(), 2);
         save_snapshot(&b, "three").unwrap();
         assert_eq!(snapshots("snap-book").len(), 3);
         let _ = delete("snap-book");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn links_and_odd_files_are_not_followed() {
+        setup();
+        let outside = std::env::temp_dir().join(format!("bookbinder-links-{}", std::process::id()));
+        std::fs::create_dir_all(&outside).unwrap();
+        let p = save(&book("link-book", "L")).unwrap();
+        // a planted .bak link is replaced, not written through
+        std::os::unix::fs::symlink(outside.join("victim"), book_dir("link-book").join("book.json.bak")).unwrap();
+        save(&book("link-book", "L")).unwrap();
+        assert!(!outside.join("victim").exists() && std::fs::symlink_metadata(book_dir("link-book").join("book.json.bak")).unwrap().is_file());
+        // a folder (or pipe, or device) where the book should be isn't read
+        assert!(read_book(&outside).is_err() && read_book(Path::new("/dev/zero")).is_err());
+        // a linked exports folder is refused
+        std::os::unix::fs::symlink(&outside, book_dir("link-book").join("exports")).unwrap();
+        assert!(exports_dir("link-book").is_err() && write_export("link-book", "a.pdf", b"x").is_err());
+        assert!(!outside.join("a.pdf").exists() && load(&p).is_ok());
+        assert!(is_export_name("A.PDF") && is_export_name("b.epub") && !is_export_name("book.json") && !is_export_name("../a.pdf"));
+        let _ = delete("link-book");
+        let _ = std::fs::remove_dir_all(&outside);
     }
 
     #[test]

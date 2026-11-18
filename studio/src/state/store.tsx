@@ -10,7 +10,7 @@ import { Ctx, type SaveState, type Screen, type Selection, type Store } from './
 
 const DEFAULT_SETTINGS: Settings = {
   dark: false, sample_created: true, editor_size: 18, last_book: null, typewriter: false, dim_others: false,
-  lamp_brightness: 0.8, lamp_warmth: 0.6, typewriter_font: true, accent: 'raspberry',
+  lamp_brightness: 0.8, lamp_warmth: 0.6, typewriter_font: true, typewriter_sound: true, accent: 'raspberry',
 }
 
 const SAVE_FAILED = "Couldn't save your changes. They're still open here — try again or copy them."
@@ -258,7 +258,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         e.preventDefault()
         await writeSettings()
         if (await saveNow()) await win.destroy()
-        else toast.error(SAVE_FAILED)
+        else toast.error(SAVE_FAILED, { action: { label: 'Close anyway', onClick: () => void win.destroy() } })
       })
     })()
     return () => unlisten?.()

@@ -218,8 +218,14 @@ into Lines" (Software: Practice and Experience, 1981) and the parameters in *The
 - "Dim" fades every paragraph except the cursor's to 32 %.
 - Focus + Typewriter shows a paper page with a warm radial lamp light (Lamp and Warmth sliders),
   a ruled type guide and an optional monospaced "typewriter type" (Source Code Pro).
+- With Typewriter on, keys make typewriter sounds ("Sound" in the toolbar, "Key sounds" in the
+  type head's menu). They are synthesised with Web Audio, with no audio files. A letter, digit or
+  mark is a typebar strike: capitals land harder, small marks lighter, and each physical key keeps
+  its own pitch. Space is the bar and the carriage step, Backspace and Delete knock the carriage
+  back, and Enter rings the margin bell and returns the carriage. Arrows, Tab and shortcuts are
+  silent.
 
 ## Not in this version
 
-Maps, series, branches, collaboration, cloud sync, audiobook narration, ambient sound and
-typewriter sounds. AI tools are deliberately left out.
+Maps, series, branches, collaboration, cloud sync, audiobook narration and ambient
+sound. AI tools are deliberately left out.
