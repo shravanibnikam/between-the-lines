@@ -1,6 +1,6 @@
 [package]
 name = "bookbinder-studio"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Between the Lines desktop app (Tauri)"
 license = "MIT"
