@@ -325,6 +325,84 @@ fn end_to_end() {
     assert!(t2.iter().any(|t| t.contains("Ebook ISBN")) && t2.iter().any(|t| t.contains("Paperback ISBN")), "{t2:?}");
     assert!(!t2.iter().any(|t| t.contains("Hardcover ISBN")), "{t2:?}");
 
+    // ---- images and the cover ----
+    assert!(texts.iter().any(|t| t.contains("No ebook cover")), "{texts:?}");
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let pid = created[1]["id"].as_str().unwrap().to_string();
+    let png = ok(&api, "image_add", json!({ "book": pid, "path": fixtures.join("tiny.png") }));
+    let jpg = ok(&api, "image_add", json!({ "book": pid, "path": fixtures.join("tiny.jpg") }));
+    assert_eq!((png["w"].clone(), png["h"].clone()), (json!(40), json!(30)));
+    let (png_name, jpg_name) = (png["name"].as_str().unwrap().to_string(), jpg["name"].as_str().unwrap().to_string());
+    assert!(png_name.starts_with("tiny-") && png_name.ends_with(".png") && jpg_name.ends_with(".jpg"), "{png_name} {jpg_name}");
+    assert_ne!(png_name, ok(&api, "image_add", json!({ "book": pid, "path": fixtures.join("tiny.png") }))["name"].as_str().unwrap());
+    let fake = outside.join("fake.png");
+    std::fs::write(&fake, "not really a picture").unwrap();
+    let cut = outside.join("cut.png");
+    std::fs::write(&cut, &std::fs::read(fixtures.join("tiny.png")).unwrap()[..200]).unwrap();
+    let huge = outside.join("huge.jpg");
+    std::fs::File::create(&huge).unwrap().set_len(41 * 1024 * 1024).unwrap();
+    assert!(err(&api, "image_add", json!({ "book": pid, "path": fake })).contains("PNG and JPEG"));
+    assert!(err(&api, "image_add", json!({ "book": pid, "path": huge })).contains("40 MB"));
+    err(&api, "image_add", json!({ "book": pid, "path": cut }));
+    err(&api, "image_add", json!({ "book": pid, "path": outside.join("missing.png") }));
+    err(&api, "image_add", json!({ "book": pid, "path": outside }));
+    err(&api, "image_add", json!({ "book": "../x", "path": fixtures.join("tiny.png") }));
+    err(&api, "image_add", json!({ "book": "never-saved", "path": fixtures.join("tiny.png") }));
+    err(&api, "image_add", json!({ "book": pid }));
+    assert_eq!(std::fs::read_dir(storage::images_dir(&pid)).unwrap().count(), 3, "failed adds leave nothing behind");
+    let uri = ok(&api, "image_data", json!({ "book": pid, "name": png_name }));
+    assert!(uri.as_str().unwrap().starts_with("data:image/png;base64,iVBORw0KGgo"));
+    assert!(ok(&api, "image_data", json!({ "book": pid, "name": jpg_name })).as_str().unwrap().starts_with("data:image/jpeg;base64,/9j/"));
+    std::fs::write(storage::book_dir(&pid).join("secret.png"), "x").unwrap();
+    for bad in ["../book.json", "../secret.png", "a/b.png", "x.gif", "", "nope.png", "/etc/hosts"] {
+        err(&api, "image_data", json!({ "book": pid, "name": bad }));
+    }
+    err(&api, "image_data", json!({ "book": "../x", "name": png_name }));
+    let mut pics = ok(&api, "book_load", json!({ "id": pid }));
+    pics["meta"]["cover"] = json!(jpg_name);
+    pics["body"][0]["text"] = json!(format!("Before.\n![A *small* picture]({png_name})\n![](../book.json)\n![](missing.png)\nAfter.\n![]({jpg_name})"));
+    let pics = ok(&api, "book_save", json!({ "book": pics }));
+    assert_eq!(ok(&api, "book_load", json!({ "id": pid }))["meta"]["cover"], json!(jpg_name));
+    let info = layout_info(&api, &pics, "print", 1.0);
+    let warnings = info["warnings"].as_array().unwrap();
+    assert!(warnings.iter().any(|w| w.as_str().unwrap().contains("missing.png")), "{warnings:?}");
+    let shown = (0..info["pages"].as_array().unwrap().len())
+        .map(|i| ok(&api, "page_svg", json!({ "key": info["key"], "index": i })).as_str().unwrap().matches("<image ").count())
+        .sum::<usize>();
+    assert_eq!(shown, 2, "both good images are drawn");
+    layout_and_svgs(&api, &pics, "phone", 1.0);
+    let pf = ok(&api, "preflight", json!({ "book": pics }));
+    assert!(!pf.as_array().unwrap().iter().any(|c| c["text"].as_str().unwrap().contains("ebook cover")), "{pf}");
+    let pdf = std::fs::read(ok(&api, "export", json!({ "book": pics, "kind": "print" }))["path"].as_str().unwrap()).unwrap();
+    let has = |s: &str| pdf.windows(s.len()).any(|w| w == s.as_bytes());
+    assert!(has("/Subtype /Image") && has("/SMask") && has("/XObject << /Im0 ") && has("/Im1 "), "two image objects, the PNG with its alpha");
+    let mut pdfx = pics.clone();
+    pdfx["print"]["pdfx"] = json!(true);
+    let x = std::fs::read(ok(&api, "export", json!({ "book": pdfx, "kind": "print" }))["path"].as_str().unwrap()).unwrap();
+    let xhas = |s: &str| x.windows(s.len()).any(|w| w == s.as_bytes());
+    assert!(xhas("/Im1 ") && !xhas("/SMask") && !xhas("DeviceRGB"), "PDF/X images are flattened, grey or CMYK");
+    let blocks = ok(&api, "markup_blocks", json!({ "text": format!("![A *small* picture]({png_name})") }));
+    assert_eq!(blocks[0]["type"], json!("Para"), "the editor keeps image lines as text");
+    let line: String = blocks[0]["spans"].as_array().unwrap().iter().map(|s| s["text"].as_str().unwrap()).collect();
+    assert_eq!(line, format!("![A small picture]({png_name})"));
+    for kind in ["epub_kindle", "epub_apple", "epub_generic"] {
+        let path = PathBuf::from(ok(&api, "export", json!({ "book": pics, "kind": kind }))["path"].as_str().unwrap());
+        check_epub(&path);
+        let mut z = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+        let mut opf = String::new();
+        z.by_name("OEBPS/content.opf").unwrap().read_to_string(&mut opf).unwrap();
+        assert!(opf.contains(&format!("<item id=\"img-{jpg_name}\" href=\"images/{jpg_name}\" media-type=\"image/jpeg\" properties=\"cover-image\"/>")), "{opf}");
+        assert!(opf.contains(&format!("<meta name=\"cover\" content=\"img-{jpg_name}\"/>")));
+        assert!(opf.contains(&format!("href=\"images/{png_name}\" media-type=\"image/png\"/>")));
+        assert!(opf.find("<itemref idref=\"cover\"/>").unwrap() < opf.find("<itemref idref=\"front-00\"/>").unwrap(), "cover first");
+        assert_eq!(opf.matches(&format!("href=\"images/{jpg_name}\"")).count(), 1, "cover and inline use share one item");
+        let mut ch = String::new();
+        z.by_name("OEBPS/chapter-001.xhtml").unwrap().read_to_string(&mut ch).unwrap();
+        assert!(ch.contains(&format!("<img src=\"images/{png_name}\" alt=\"A small picture\"/>")) && ch.contains("<figcaption>A <em>small</em> picture</figcaption>"), "{ch}");
+        assert!(!ch.contains("missing.png") && !ch.contains("book.json"));
+        assert!(z.by_name(&format!("OEBPS/images/{png_name}")).is_ok() && z.by_name("OEBPS/cover.xhtml").is_ok());
+    }
+
     // ---- export every kind ----
     ok(&api, "layout", json!({ "book": book, "mode": "print", "scale": 1 })); // layout state must not matter
     let mut seen = Vec::new();

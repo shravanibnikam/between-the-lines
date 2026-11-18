@@ -22,7 +22,7 @@ Please don't attach a manuscript you don't want to be public.
 
    ```sh
    cargo test --manifest-path core/Cargo.toml
-   cd studio && npm run build && npm run lint
+   cd studio && npm run build && npm run lint && npm test
    ```
 
 5. Open a pull request saying what changed and why. For interface changes, include a screenshot.
@@ -35,6 +35,24 @@ Please don't attach a manuscript you don't want to be public.
   [`studio/DESIGN.md`](studio/DESIGN.md).
 - **Typesetting numbers:** documented in [`MECHANICS.md`](MECHANICS.md). Update it when you change
   one.
+
+## Signing releases
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which drafts a GitHub release with
+macOS, Windows and Linux builds. Signing is optional: each platform is signed only when its
+repository secrets are set, so forks still build.
+
+- **macOS** (Apple Developer Program): `APPLE_CERTIFICATE` (the Developer ID Application
+  certificate exported as `.p12`, base64-encoded), `APPLE_CERTIFICATE_PASSWORD` and
+  `APPLE_SIGNING_IDENTITY` sign the app. Add `APPLE_ID`, `APPLE_PASSWORD` (an app-specific
+  password) and `APPLE_TEAM_ID` to notarize it as well, which is what stops the Gatekeeper
+  warning. Without a certificate the app is ad-hoc signed, so it opens after right-click > Open.
+- **Windows** ([Azure Trusted Signing](https://learn.microsoft.com/azure/trusted-signing/)):
+  `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` and `AZURE_TENANT_ID` for an app registration with the
+  *Trusted Signing Certificate Profile Signer* role, plus `TRUSTED_SIGNING_ENDPOINT` (e.g.
+  `https://eus.codesigning.azure.net`), `TRUSTED_SIGNING_ACCOUNT` and `TRUSTED_SIGNING_PROFILE`.
+  Without them SmartScreen warns on first run.
+- **Linux** builds (AppImage, `.deb`, `.rpm`) aren't signed.
 
 ## Ground rules
 

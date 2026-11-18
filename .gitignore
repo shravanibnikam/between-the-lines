@@ -6,3 +6,6 @@ studio/src-tauri/target/
 studio/src-tauri/gen/
 *.tsbuildinfo
 .DS_Store
+
+# Claude Code agent worktrees
+.claude/worktrees/

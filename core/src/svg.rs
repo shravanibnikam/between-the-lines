@@ -1,5 +1,6 @@
 //! One typeset page as a standalone SVG (for the studio's preview). Items sit exactly where
-//! the PDF writer and the old on-screen painter put them: points, y down from the top.
+//! the PDF writer and the old on-screen painter put them: points, y down from the top. Images
+//! are embedded whole as `data:` URIs.
 
 use crate::layout::{Doc, Item};
 use crate::ornaments::{self, Prim};
@@ -51,8 +52,16 @@ pub fn page_svg(doc: &Doc, index: usize, paper: &str) -> String {
         s.push_str("</svg>\n");
         return s;
     };
+    // each image file read once per page, inline (the studio loads images only as data: URIs)
+    let mut uris: std::collections::HashMap<&str, Option<String>> = std::collections::HashMap::new();
     for it in &page.items {
         match it {
+            Item::Image { src, x, y, w, h } => {
+                let uri = uris.entry(src).or_insert_with(|| crate::image::read(&doc.book_id, src).ok().map(|(k, b)| crate::image::data_uri(k, &b)));
+                if let Some(u) = uri {
+                    let _ = writeln!(s, "<image x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\" href=\"{u}\"/>", n(*x), n(*y), n(*w), n(*h));
+                }
+            }
             Item::Text { x, y, size, face, text, color, spacing, slant } => {
                 // the PDF skews by 0.2 (x grows by 0.2 per point of height); y is down here
                 let (px, py, tf) = if *slant {

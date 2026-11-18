@@ -28,6 +28,10 @@ fn lang_tag(s: &str) -> String {
 fn inline(spans: &[Span]) -> String {
     let mut out = String::new();
     for s in spans {
+        if let Some(n) = s.note {
+            out.push_str(&format!("<a epub:type=\"noteref\" href=\"#fn{n}\" id=\"fnref{n}\"><sup>{n}</sup></a>"));
+            continue;
+        }
         let t = esc(&s.text);
         match (s.bold, s.italic) {
             (true, true) => out.push_str(&format!("<strong><em>{t}</em></strong>")),
@@ -45,7 +49,7 @@ fn first_para(spans: &[Span], drop_cap: bool, lead: FirstParagraph, lead_words: 
     let mut plain = markup::plain(spans);
     let mut out = String::new();
     let mut rest_html = text;
-    if drop_cap && spans.first().map(|s| !s.bold && !s.italic).unwrap_or(false) {
+    if drop_cap && spans.first().map(|s| !s.bold && !s.italic && s.note.is_none()).unwrap_or(false) {
         let mut cap = String::new();
         let mut chars = plain.chars();
         for c in chars.by_ref() {
@@ -71,7 +75,8 @@ fn first_para(spans: &[Span], drop_cap: bool, lead: FirstParagraph, lead_words: 
             rest_html = inline(&rest);
         }
     }
-    if lead != FirstParagraph::Plain && spans.iter().all(|s| !s.bold && !s.italic) {
+    // (plain text only: the lead-in would lose links to footnotes)
+    if lead != FirstParagraph::Plain && spans.iter().all(|s| !s.bold && !s.italic && s.note.is_none()) {
         let n = if lead == FirstParagraph::SmallCapsLine { 7 } else { lead_words.clamp(1, 12) as usize };
         let words: Vec<&str> = plain.split_whitespace().collect();
         if words.len() > n {
@@ -90,7 +95,8 @@ fn blocks_html(book: &Book, text: &str, drop_cap: bool, lead: FirstParagraph, ce
     let mut html = String::new();
     let mut first = true;
     let mut after_break = st.no_indent_after_heading;
-    for b in markup::parse_blocks(text, book.smart_quotes) {
+    let parsed = markup::parse_section(text, book.smart_quotes);
+    for b in parsed.blocks {
         match b {
             Block::Para(spans) => {
                 let class = if centered {
@@ -126,9 +132,81 @@ fn blocks_html(book: &Book, text: &str, drop_cap: bool, lead: FirstParagraph, ce
                 after_break = st.no_indent_after_heading;
                 first = false;
             }
+            Block::Image { src, caption } => {
+                // the same check `book_images` makes, so every picture shown is in the package
+                if crate::image::kind(&book.id, &src).is_some() {
+                    let cap = if caption.is_empty() { String::new() } else { format!("<figcaption>{}</figcaption>\n", inline(&caption)) };
+                    html.push_str(&format!("<figure>\n<img src=\"images/{}\" alt=\"{}\"/>\n{cap}</figure>\n", esc(&src), esc(&markup::plain(&caption))));
+                }
+                after_break = st.no_indent_after_heading;
+                first = false;
+            }
+            Block::Table { header, rows, align } => {
+                html.push_str(&table_html(&header, &rows, &align));
+                after_break = st.no_indent_after_heading;
+                first = false;
+            }
         }
     }
+    // a note referenced twice links back to its first reference (ids are unique)
+    for n in 1..=parsed.notes.len() {
+        let id = format!(" id=\"fnref{n}\"");
+        if let Some(i) = html.find(&id) {
+            let rest = html.split_off(i + id.len()).replace(&id, "");
+            html.push_str(&rest);
+        }
+    }
+    // footnotes pop up in readers that support them, and sit at the chapter's end in others
+    for (i, note) in parsed.notes.iter().enumerate() {
+        let n = i + 1;
+        html.push_str(&format!("<aside epub:type=\"footnote\" id=\"fn{n}\" class=\"footnote\"><p><a href=\"#fnref{n}\">{n}.</a> {}</p></aside>\n", inline(note)));
+    }
     html
+}
+
+/// The pictures the package needs, each once with its kind: the cover, then those the text
+/// shows (from the sections set with `blocks_html`), skipping files that are missing.
+fn book_images(book: &Book) -> Vec<(String, crate::image::Kind)> {
+    let flowed = book.front.iter().chain(&book.body).chain(&book.back).filter(|s| !matches!(s.kind, SectionKind::TitlePage | SectionKind::Copyright | SectionKind::Contents));
+    let names = std::iter::once(book.meta.cover.clone()).chain(flowed.flat_map(|s| s.text.lines().filter_map(|l| markup::image_line(l.trim())).map(|(_, src)| src)));
+    let mut out: Vec<(String, crate::image::Kind)> = Vec::new();
+    for name in names {
+        if !out.iter().any(|p| p.0 == name) {
+            if let Some(k) = crate::image::kind(&book.id, &name) {
+                out.push((name, k));
+            }
+        }
+    }
+    out
+}
+
+/// A table with its header in `<thead>`; alignment comes from the `c` and `r` classes.
+fn table_html(header: &[Vec<Span>], rows: &[Vec<Vec<Span>>], align: &[HAlign]) -> String {
+    let row = |tag: &str, cells: &[Vec<Span>]| {
+        let mut r = String::from("<tr>");
+        for (k, c) in cells.iter().enumerate() {
+            let class = match align.get(k) {
+                Some(HAlign::Center) => " class=\"c\"",
+                Some(HAlign::Right) => " class=\"r\"",
+                _ => "",
+            };
+            let scope = if tag == "th" { " scope=\"col\"" } else { "" };
+            r.push_str(&format!("<{tag}{scope}{class}>{}</{tag}>", inline(c)));
+        }
+        r + "</tr>\n"
+    };
+    let mut t = String::from("<table>\n");
+    if !header.is_empty() {
+        t.push_str(&format!("<thead>\n{}</thead>\n", row("th", header)));
+    }
+    if !rows.is_empty() {
+        t.push_str("<tbody>\n");
+        for r in rows {
+            t.push_str(&row("td", r));
+        }
+        t.push_str("</tbody>\n");
+    }
+    t + "</table>\n"
 }
 
 fn page(lang: &str, title: &str, body: &str, epub_type: &str) -> String {
@@ -188,9 +266,20 @@ img.ornament {{ height: {orn_h}em; width: auto; }}\n\
 .titlepage .publisher {{ font-size: 0.85em; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 4em; text-indent: 0; text-align: center; }}\n\
 .copyright p {{ text-indent: 0; text-align: left; font-size: 0.8em; margin-bottom: 0.6em; }}\n\
 .centered-page {{ margin-top: 25%; text-align: center; font-style: italic; }}\n\
+figure {{ margin: 1em 0; text-align: center; page-break-inside: avoid; }}\n\
+figure img {{ max-width: 100%; height: auto; }}\n\
+figcaption {{ font-style: italic; font-size: 0.85em; text-indent: 0; text-align: center; margin-top: 0.4em; }}\n\
+.cover {{ margin: 0; padding: 0; text-align: center; }}\n\
+.cover img {{ max-width: 100%; max-height: 100%; height: auto; }}\n\
 nav ol {{ list-style: none; padding-left: 0; }} nav ol ol {{ padding-left: 1.5em; }}\n\
 .contents li {{ margin: 0.3em 0; }}\n\
-a {{ color: inherit; text-decoration: none; }}\n",
+a {{ color: inherit; text-decoration: none; }}\n\
+table {{ border-collapse: collapse; margin: 1em auto; font-size: 0.9em; border-top: 1.5px solid; border-bottom: 1.5px solid; }}\n\
+th, td {{ padding: 0.25em 0.6em; text-align: left; vertical-align: top; }}\n\
+thead th {{ border-bottom: 1px solid; }}\n\
+th.c, td.c {{ text-align: center; }} th.r, td.r {{ text-align: right; }}\n\
+sup {{ font-size: 0.7em; line-height: 0; }}\n\
+aside.footnote {{ font-size: 0.85em; margin-top: 1em; }} aside.footnote p {{ text-indent: 0; }}\n",
         bf = st.body_font,
         bs = serif(&st.body_font),
         lh = st.line_height,
@@ -246,6 +335,18 @@ pub fn write(book: &Book, target: EbookTarget) -> Result<EpubResult, String> {
         files.push((name, html.into_bytes(), "application/xhtml+xml".into(), id.clone()));
         spine.push(id);
     };
+    // The book's own pictures; the cover also gets a page of its own, first in the spine.
+    let mut cover_id = None;
+    for (name, kind) in book_images(book) {
+        let Ok((_, bytes)) = crate::image::read(&book.id, &name) else { continue };
+        let id = format!("img-{name}");
+        if name == m.cover {
+            let body = format!("<section class=\"cover\" epub:type=\"cover\">\n<img src=\"images/{}\" alt=\"{}\"/>\n</section>\n", esc(&name), esc(&title));
+            add_page(&mut files, &mut spine, "cover.xhtml".into(), page(&lang, &title, &body, "cover"));
+            cover_id = Some(id.clone());
+        }
+        files.push((format!("images/{name}"), bytes, kind.mime().into(), id));
+    }
     // Front matter
     for (i, s) in book.front.iter().enumerate() {
         let name = format!("front-{i:02}.xhtml");
@@ -468,6 +569,8 @@ pub fn write(book: &Book, target: EbookTarget) -> Result<EpubResult, String> {
     for (path, _, mt, id) in &files {
         let props = if id == "nav" {
             " properties=\"nav\""
+        } else if cover_id.as_ref() == Some(id) {
+            " properties=\"cover-image\""
         } else {
             ""
         };
@@ -480,6 +583,9 @@ pub fn write(book: &Book, target: EbookTarget) -> Result<EpubResult, String> {
     let apple_prefix = if target == EbookTarget::Apple { " prefix=\"ibooks: http://vocabulary.itunes.apple.com/rdf/ibooks/vocabulary-extensions-1.0/\"" } else { "" };
     let apple_meta = if target == EbookTarget::Apple && book.ebook.embed_fonts { "<meta property=\"ibooks:specified-fonts\">true</meta>\n" } else { "" };
     let mut extra_meta = String::new();
+    if let Some(id) = &cover_id {
+        extra_meta.push_str(&format!("<meta name=\"cover\" content=\"{}\"/>\n", esc(id))); // Kindle
+    }
     if !m.publisher.trim().is_empty() {
         extra_meta.push_str(&format!("<dc:publisher>{}</dc:publisher>\n", esc(m.publisher.trim())));
     }
@@ -649,7 +755,7 @@ mod tests {
 
     #[test]
     fn drop_cap_spans_and_no_indent_setting() {
-        let sp = |t: &str, bold| Span { text: t.into(), bold, italic: false };
+        let sp = |t: &str, bold| Span { text: t.into(), bold, ..Default::default() };
         let out = first_para(&[sp("“", false), sp("Wait", true)], true, FirstParagraph::Plain, 3);
         assert!(out.contains(">“W</span>") && out.ends_with("<strong>ait</strong>"), "{out}");
         let mut b = Book::default();
@@ -659,5 +765,25 @@ mod tests {
         b.style.no_indent_after_heading = true;
         let h = blocks_html(&b, "## Sub\n\nText", false, FirstParagraph::Plain, false, None);
         assert!(h.contains("class=\"first\""), "{h}");
+    }
+
+    #[test]
+    fn tables_and_popup_footnotes() {
+        let mut b = Book::default();
+        let mut c = Section::new(SectionKind::Chapter, "One");
+        c.text = "See[^a] and again[^a], then[^b].\n| A | B |\n|---|--:|\n| x[^b] | 1 |\n[^a]: Note *A*.\n[^b]: Note B.".into();
+        b.body.push(c);
+        b.body.push(Section::new(SectionKind::Chapter, "Two"));
+        b.body[1].text = "Fresh[^z].\n[^z]: Z.".into();
+        let ps = assert_well_formed(&write(&b, EbookTarget::Generic).unwrap().bytes);
+        let get = |n: &str| ps.iter().find(|p| p.0.ends_with(n)).unwrap().1.clone();
+        let ch = get("chapter-001.xhtml");
+        assert_eq!(ch.matches("epub:type=\"noteref\"").count(), 4);
+        assert_eq!((ch.matches("id=\"fnref1\"").count(), ch.matches("id=\"fnref2\"").count()), (1, 1), "{ch}");
+        assert!(ch.contains("<aside epub:type=\"footnote\" id=\"fn1\" class=\"footnote\"><p><a href=\"#fnref1\">1.</a> Note <em>A</em>.</p></aside>"), "{ch}");
+        assert!(ch.contains("<thead>\n<tr><th scope=\"col\">A</th><th scope=\"col\" class=\"r\">B</th></tr>\n</thead>"), "{ch}");
+        assert!(ch.find("<aside").unwrap() > ch.find("</table>").unwrap());
+        // numbering restarts in the next chapter
+        assert!(get("chapter-002.xhtml").contains("href=\"#fn1\" id=\"fnref1\"><sup>1</sup>"));
     }
 }

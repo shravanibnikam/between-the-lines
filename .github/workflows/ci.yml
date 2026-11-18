@@ -14,7 +14,8 @@ jobs:
       - run: cargo test --manifest-path core/Cargo.toml
       - run: cargo clippy --manifest-path core/Cargo.toml --all-targets -- -D warnings
 
-      # Export the sample book as every EPUB target and validate each one.
+      # Export the sample book, and a copy with a cover and an inline image, as every EPUB
+      # target and validate each one.
       - name: Validate EPUB exports with epubcheck
         env:
           BOOKBINDER_DATA_DIR: ${{ runner.temp }}/bookbinder
@@ -25,9 +26,17 @@ jobs:
           until curl -s -o /dev/null 127.0.0.1:1421; do sleep 1; done
           call() { curl -sf -X POST -H 'content-type: application/json' --data-binary @- 127.0.0.1:1421/call; }
           book=$(echo '{"cmd":"sample_add","args":{}}' | call)
-          for kind in epub_kindle epub_apple epub_generic; do
-            file=$(jq -n --argjson b "$book" --arg k "$kind" '{cmd:"export",args:{book:$b,kind:$k}}' | call | jq -r .path)
-            epubcheck "$file"
+          pics=$(echo '{"cmd":"sample_add","args":{}}' | call)
+          add() { jq -n --argjson b "$pics" --arg p "$PWD/core/tests/$1" '{cmd:"image_add",args:{book:$b.id,path:$p}}' | call | jq -r .name; }
+          cover=$(add tiny.jpg)
+          img=$(add tiny.png)
+          pics=$(jq -n --argjson b "$pics" --arg c "$cover" --arg i "$img" \
+            '{cmd:"book_save",args:{book:($b | .meta.cover = $c | .body[0].text = ("![A small picture](\($i))\n" + .body[0].text))}}' | call)
+          for b in "$book" "$pics"; do
+            for kind in epub_kindle epub_apple epub_generic; do
+              file=$(jq -n --argjson b "$b" --arg k "$kind" '{cmd:"export",args:{book:$b,kind:$k}}' | call | jq -r .path)
+              epubcheck "$file"
+            done
           done
 
   studio:

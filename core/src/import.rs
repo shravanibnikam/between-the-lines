@@ -2,6 +2,7 @@
 //! Chapters are found from heading styles, or from lines such as "Chapter 3" or "Prologue".
 
 use crate::model::{Section, SectionKind};
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
 
@@ -408,6 +409,13 @@ pub fn import_markdown(text: &str) -> Imported {
             heads.push(None);
             continue;
         }
+        // table rows and footnote definitions keep their own lines
+        if t.trim_start().starts_with('|') || crate::markup::note_def(t).is_some() {
+            flush(&mut cur, &mut paras, &mut heads);
+            paras.push(underscores_to_bold(t.trim()));
+            heads.push(None);
+            continue;
+        }
         if let Some((marker, item)) = list_item(t) {
             flush(&mut cur, &mut paras, &mut heads);
             cur = format!("{marker} {}", underscores_to_bold(item));
@@ -497,20 +505,22 @@ pub fn import_docx(path: &Path) -> Result<Imported, String> {
     let styles = zip_text(&mut ar, "word/styles.xml")?.unwrap_or_default();
     let core = zip_text(&mut ar, "docProps/core.xml")?.unwrap_or_default();
     let mut notes: Vec<String> = Vec::new();
-    for (part, what) in [("word/footnotes.xml", "Footnotes"), ("word/endnotes.xml", "Endnotes")] {
+    // note text by key: the footnote's w:id, or "e" and the endnote's
+    let mut note_text: HashMap<String, String> = HashMap::new();
+    for (part, prefix) in [("word/footnotes.xml", ""), ("word/endnotes.xml", "e")] {
         let xml = zip_text(&mut ar, part)?.unwrap_or_default();
         if let Ok(x) = roxmltree::Document::parse(&xml) {
             // separators carry a w:type; real notes don't
-            let n = x
-                .descendants()
-                .filter(|n| matches!(n.tag_name().name(), "footnote" | "endnote") && attr(n, "type").is_none())
-                .filter(|n| n.descendants().any(|t| t.tag_name().name() == "t" && t.text().map(|s| !s.trim().is_empty()).unwrap_or(false)))
-                .count();
-            if n > 0 {
-                notes.push(format!("{what} aren't imported: {n} dropped."));
+            for n in x.descendants().filter(|n| matches!(n.tag_name().name(), "footnote" | "endnote") && attr(n, "type").is_none()) {
+                let paras = n.children().filter(|c| c.tag_name().name() == "p");
+                let text: Vec<String> = paras.map(|p| merge_runs(docx_runs(p, &HashMap::new(), &mut Vec::new())).trim().to_string()).filter(|t| !t.is_empty()).collect();
+                if let Some(id) = attr(&n, "id").filter(|_| !text.is_empty()) {
+                    note_text.insert(format!("{prefix}{id}"), text.join(" "));
+                }
             }
         }
     }
+    let mut refs: Vec<String> = Vec::new();
     // style id -> (name, bold, italic)
     let mut style_names: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     if let Ok(sx) = roxmltree::Document::parse(&styles) {
@@ -572,32 +582,7 @@ pub fn import_docx(path: &Path) -> Result<Imported, String> {
             toc_skipped += 1;
             continue;
         }
-        let mut runs: Vec<(String, bool, bool)> = Vec::new();
-        for r in p.descendants().filter(|n| n.tag_name().name() == "r") {
-            if r.ancestors().any(|a| matches!(a.tag_name().name(), "del" | "moveFrom" | "txbxContent" | "Fallback")) {
-                continue;
-            }
-            let rpr = r.children().find(|c| c.tag_name().name() == "rPr");
-            if on(rpr.and_then(|x| x.children().find(|c| c.tag_name().name() == "vanish"))) {
-                continue; // hidden text
-            }
-            let bold = on(rpr.and_then(|x| x.children().find(|c| c.tag_name().name() == "b")));
-            let italic = on(rpr.and_then(|x| x.children().find(|c| c.tag_name().name() == "i")));
-            let mut s = String::new();
-            for c in r.children() {
-                match c.tag_name().name() {
-                    "t" => s.push_str(c.text().unwrap_or("")),
-                    "tab" => s.push(' '),
-                    "br" | "cr" => s.push(' '),
-                    "noBreakHyphen" => s.push('-'),
-                    _ => {}
-                }
-            }
-            if !s.is_empty() {
-                runs.push((s, bold, italic));
-            }
-        }
-        let text = merge_runs(runs).trim().to_string();
+        let text = merge_runs(docx_runs(p, &note_text, &mut refs)).trim().to_string();
         if text.is_empty() {
             continue;
         }
@@ -639,9 +624,63 @@ pub fn import_docx(path: &Path) -> Result<Imported, String> {
             }
         }
     }
-    let (sections, split_notes) = split_into_chapters(paras, heads, guess);
+    let (mut sections, split_notes) = split_into_chapters(paras, heads, guess);
     notes.extend(split_notes);
+    let endnotes = refs.iter().filter(|r| r.starts_with('e')).count();
+    if endnotes > 0 {
+        notes.push(format!("Endnotes became footnotes ({endnotes})."));
+    }
+    let texts: Vec<String> = refs.iter().map(|r| note_text[r].clone()).collect();
+    append_notes(&mut sections, &texts);
     Ok(Imported { title, author, sections, notes })
+}
+
+/// A Word paragraph's runs (text, bold, italic). A footnote or endnote reference with text in
+/// `notes` becomes `[^n]`, n counting `refs`, which collects the notes' keys in order.
+fn docx_runs(p: roxmltree::Node, notes: &HashMap<String, String>, refs: &mut Vec<String>) -> Vec<(String, bool, bool)> {
+    let mut runs: Vec<(String, bool, bool)> = Vec::new();
+    for r in p.descendants().filter(|n| n.tag_name().name() == "r") {
+        if r.ancestors().any(|a| matches!(a.tag_name().name(), "del" | "moveFrom" | "txbxContent" | "Fallback")) {
+            continue;
+        }
+        let rpr = r.children().find(|c| c.tag_name().name() == "rPr");
+        if on(rpr.and_then(|x| x.children().find(|c| c.tag_name().name() == "vanish"))) {
+            continue; // hidden text
+        }
+        let bold = on(rpr.and_then(|x| x.children().find(|c| c.tag_name().name() == "b")));
+        let italic = on(rpr.and_then(|x| x.children().find(|c| c.tag_name().name() == "i")));
+        let mut s = String::new();
+        for c in r.children() {
+            match c.tag_name().name() {
+                "t" => s.push_str(c.text().unwrap_or("")),
+                "tab" => s.push(' '),
+                "br" | "cr" => s.push(' '),
+                "noBreakHyphen" => s.push('-'),
+                kind @ ("footnoteReference" | "endnoteReference") => {
+                    let key = format!("{}{}", if kind == "endnoteReference" { "e" } else { "" }, attr(&c, "id").unwrap_or(""));
+                    if notes.contains_key(&key) {
+                        refs.push(key);
+                        s.push_str(&format!("[^{}]", refs.len()));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !s.is_empty() {
+            runs.push((s, bold, italic));
+        }
+    }
+    runs
+}
+
+/// Add note `i` as a `[^i+1]: text` line at the end of the section that refers to it.
+fn append_notes(sections: &mut [Section], texts: &[String]) {
+    for (i, text) in texts.iter().enumerate() {
+        let label = format!("[^{}]", i + 1);
+        if let Some(s) = sections.iter_mut().find(|s| s.text.contains(&label)) {
+            s.text.push_str(&format!("\n{label}: {text}"));
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -670,7 +709,9 @@ pub fn import_odt(path: &Path) -> Result<Imported, String> {
     let mut heads = Vec::new();
     let mut toc_skipped = 0;
     let mut has_headings = false;
-    fn collect(n: roxmltree::Node, fmt: &std::collections::HashMap<String, (bool, bool)>, style: (bool, bool), out: &mut Vec<(String, bool, bool)>) {
+    let mut note_texts: Vec<String> = Vec::new();
+    /// A paragraph's runs; a note becomes `[^n]` and its text goes in `texts` (n counts them).
+    fn collect(n: roxmltree::Node, fmt: &HashMap<String, (bool, bool)>, style: (bool, bool), out: &mut Vec<(String, bool, bool)>, texts: &mut Vec<String>) {
         for c in n.children() {
             if c.is_text() {
                 out.push((c.text().unwrap_or("").to_string(), style.0, style.1));
@@ -679,11 +720,27 @@ pub fn import_odt(path: &Path) -> Result<Imported, String> {
             match c.tag_name().name() {
                 "span" => {
                     let st = attr(&c, "style-name").and_then(|s| fmt.get(s)).copied().unwrap_or(style);
-                    collect(c, fmt, (st.0 || style.0, st.1 || style.1), out);
+                    collect(c, fmt, (st.0 || style.0, st.1 || style.1), out, texts);
                 }
                 "s" => out.push((" ".repeat(attr(&c, "c").and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).min(64)), style.0, style.1)),
                 "tab" | "line-break" => out.push((" ".into(), style.0, style.1)),
-                "a" => collect(c, fmt, style, out),
+                "a" => collect(c, fmt, style, out, texts),
+                "note" => {
+                    let body = c.children().filter(|b| b.tag_name().name() == "note-body").flat_map(|b| b.children());
+                    let text: Vec<String> = body
+                        .filter(|p| matches!(p.tag_name().name(), "p" | "h"))
+                        .map(|p| {
+                            let mut runs = Vec::new();
+                            collect(p, fmt, (false, false), &mut runs, &mut Vec::new());
+                            merge_runs(runs).trim().to_string()
+                        })
+                        .filter(|t| !t.is_empty())
+                        .collect();
+                    if !text.is_empty() {
+                        texts.push(text.join(" "));
+                        out.push((format!("[^{}]", texts.len()), style.0, style.1));
+                    }
+                }
                 _ => {}
             }
         }
@@ -698,7 +755,7 @@ pub fn import_odt(path: &Path) -> Result<Imported, String> {
         }
         let base = attr(&n, "style-name").and_then(|s| fmt.get(s)).copied().unwrap_or((false, false));
         let mut runs = Vec::new();
-        collect(n, &fmt, base, &mut runs);
+        collect(n, &fmt, base, &mut runs, &mut note_texts);
         let text = merge_runs(runs).trim().to_string();
         if text.is_empty() {
             continue;
@@ -724,12 +781,13 @@ pub fn import_odt(path: &Path) -> Result<Imported, String> {
     if toc_skipped > 0 {
         notes.push(format!("Skipped the table of contents ({toc_skipped} lines)."));
     }
-    let footnotes = root.descendants().filter(|n| n.tag_name().name() == "note").count();
-    if footnotes > 0 {
-        notes.push(format!("Footnotes aren't imported: {footnotes} dropped."));
+    let endnotes = root.descendants().filter(|n| n.tag_name().name() == "note" && attr(n, "note-class") == Some("endnote")).count();
+    if endnotes > 0 {
+        notes.push(format!("Endnotes became footnotes ({endnotes})."));
     }
-    let (sections, split_notes) = split_into_chapters(paras, heads, !has_headings);
+    let (mut sections, split_notes) = split_into_chapters(paras, heads, !has_headings);
     notes.extend(split_notes);
+    append_notes(&mut sections, &note_texts);
     Ok(Imported { title: None, author: None, sections, notes })
 }
 
@@ -866,7 +924,37 @@ mod tests {
         assert_eq!(r.sections[0].title, "Start");
         assert_eq!(r.sections[0].text, "Before box. After box.\nSeen shown\nPart I think he's right.");
         let n = r.notes.join("|");
-        assert!(n.contains("Footnotes aren't imported: 1") && n.contains("table of contents") && n.contains("Text boxes"), "{n}");
+        assert!(!n.contains("Footnotes") && n.contains("table of contents") && n.contains("Text boxes"), "{n}");
+    }
+
+    #[test]
+    fn docx_notes_become_footnotes() {
+        let fref = |id: &str| format!("<w:r><w:rPr><w:rStyle w:val=\"FootnoteReference\"/></w:rPr><w:footnoteReference w:id=\"{id}\"/></w:r>");
+        let eref = "<w:r><w:endnoteReference w:id=\"2\"/></w:r>";
+        let body = [
+            wp("Heading1", "One"),
+            format!("<w:p><w:r><w:t>First</w:t></w:r>{}<w:r><w:t xml:space=\"preserve\"> and *star*.</w:t></w:r></w:p>", fref("2")),
+            wp("Heading1", "Two"),
+            format!("<w:p><w:r><w:t>Second</w:t></w:r>{eref}{}</w:p>", fref("9")),
+        ]
+        .join("");
+        let doc = format!("<w:document {W}><w:body>{body}</w:body></w:document>");
+        let foot = format!("<w:footnotes {W}><w:footnote w:type=\"separator\" w:id=\"0\"><w:p><w:r><w:t>-</w:t></w:r></w:p></w:footnote><w:footnote w:id=\"2\"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space=\"preserve\"> A </w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t>note</w:t></w:r></w:p><w:p><w:r><w:t>Two paras.</w:t></w:r></w:p></w:footnote></w:footnotes>");
+        let end = format!("<w:endnotes {W}><w:endnote w:id=\"2\"><w:p><w:r><w:t>An endnote.</w:t></w:r></w:p></w:endnote></w:endnotes>");
+        let path = zip_file("notes.docx", &[("word/document.xml", &doc), ("word/footnotes.xml", &foot), ("word/endnotes.xml", &end)]);
+        let r = import_file(&path).unwrap();
+        assert_eq!(r.sections[0].text, "First[^1] and \\*star\\*.\n[^1]: A *note* Two paras.");
+        // footnote 9 has no text, so no reference is left for it
+        assert_eq!(r.sections[1].text, "Second[^2]\n[^2]: An endnote.");
+        assert!(r.notes.iter().any(|n| n == "Endnotes became footnotes (1)."), "{:?}", r.notes);
+        let p = crate::markup::parse_section(&r.sections[0].text, false);
+        assert!(p.warnings.is_empty() && p.notes.len() == 1, "{:?}", p.warnings);
+    }
+
+    #[test]
+    fn markdown_keeps_tables_and_notes() {
+        let r = import_markdown("# One\n\nText with a note[^a] and\na soft break.\n| A | B |\n|---|--:|\n| __x__ | 2 |\n[^a]: The *note*.\nAfter.");
+        assert_eq!(r.sections[0].text, "Text with a note[^a] and a soft break.\n| A | B |\n|---|--:|\n| **x** | 2 |\n[^a]: The *note*.\nAfter.");
     }
 
     #[test]
@@ -894,9 +982,9 @@ mod tests {
         let r = import_file(&zip_file("toc.odt", &[("content.xml", &c)])).unwrap();
         assert_eq!(r.sections.len(), 1);
         let t = &r.sections[0].text;
-        assert!(t.starts_with("a ") && t.contains("b\nPart I think"), "{t}");
+        assert!(t.starts_with("a ") && t.contains("b[^1]\nPart I think") && t.ends_with("\n[^1]: fn"), "{t}");
         assert!(t.len() < 200);
-        assert!(r.notes.iter().any(|n| n.contains("Footnotes")));
+        assert!(r.notes.iter().all(|n| !n.contains("Footnotes")), "{:?}", r.notes);
     }
 
     #[test]

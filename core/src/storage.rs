@@ -1,4 +1,4 @@
-//! Where books live on disk: one folder per book with `book.json`, exports and snapshots.
+//! Where books live on disk: one folder per book with `book.json`, exports, snapshots and images.
 
 use crate::model::Book;
 use serde::{Deserialize, Serialize};
@@ -54,6 +54,11 @@ pub fn exports_dir(id: &str) -> PathBuf {
     let d = book_dir(id).join("exports");
     let _ = std::fs::create_dir_all(&d);
     d
+}
+
+/// The book's pictures (its cover and the images in its text); made when the first is added.
+pub fn images_dir(id: &str) -> PathBuf {
+    book_dir(id).join("images")
 }
 
 pub fn snapshots_dir(id: &str) -> PathBuf {
@@ -286,6 +291,22 @@ pub fn write_export(id: &str, file_name: &str, bytes: &[u8]) -> Result<PathBuf, 
     Ok(p)
 }
 
+/// Save a new image in the book's images folder; an existing one is never replaced.
+pub fn add_image(id: &str, name: &str, bytes: &[u8]) -> Result<PathBuf, String> {
+    check_id(id)?;
+    if !crate::image::valid_name(name) {
+        return Err("That image name isn't valid.".into());
+    }
+    let dir = images_dir(id);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let p = dir.join(name);
+    if p.exists() {
+        return Err("An image with that name is already in the book.".into());
+    }
+    write_atomic(&p, bytes)?;
+    Ok(p)
+}
+
 pub fn safe_file_name(s: &str) -> String {
     let t: String = s
         .chars()
@@ -300,10 +321,11 @@ pub fn safe_file_name(s: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    fn setup() {
+    /// Point the library at a temporary folder (once per test run).
+    pub(crate) fn setup() {
         static ONCE: std::sync::Once = std::sync::Once::new();
         ONCE.call_once(|| {
             let d = std::env::temp_dir().join(format!("bookbinder-storage-test-{}", std::process::id()));

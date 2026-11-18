@@ -3,8 +3,9 @@
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { EditorState } from '@tiptap/pm/state'
-import { Bold, Focus, Italic, Minus, SunDim, TextCursorInput } from 'lucide-react'
+import { Bold, Focus, ImagePlus, Italic, Minus, SunDim, TextCursorInput } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { toast } from 'sonner'
 import { Bar } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +15,7 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { Toggle } from '@/components/ui/toggle'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { api } from '@/lib/api'
+import { api, isTauri, pickImage } from '@/lib/api'
 import { countWords, displayTitle, findSection, fmt, hasBody, KIND_LABEL, numberLabel, numbers } from '@/lib/book'
 import { fontStack } from '@/lib/fonts'
 import type { Area, Section } from '@/lib/types'
@@ -500,6 +501,7 @@ function Toolbar({ editor, words, page, end, focus, onFocus }: {
           <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().setHorizontalRule().run()} aria-label="Insert scene break">
             <Minus /><span className="hidden @min-[760px]:inline">Scene break</span>
           </Button>
+          <InsertImage editor={editor} />
         </>
       )}
       <div className="ml-auto flex items-center gap-1">
@@ -510,6 +512,34 @@ function Toolbar({ editor, words, page, end, focus, onFocus }: {
         {end}
       </div>
     </div>
+  )
+}
+
+/** Copy a picked image into the book and put its `![](name)` line at the cursor, as its own paragraph. */
+function InsertImage({ editor }: { editor: Editor }) {
+  const { book } = useStore()
+  const [busy, setBusy] = useState(false)
+  const insert = async () => {
+    setBusy(true)
+    try {
+      const img = await pickImage(book!.id)
+      if (img) editor.chain().focus().insertContent({ type: 'paragraph', content: [{ type: 'text', text: `![](${img.name})` }] }).run()
+    } catch (e) {
+      toast.error("Couldn't add that image", { description: String(e) })
+    } finally {
+      setBusy(false)
+    }
+  }
+  const btn = (
+    <Button variant="ghost" size="sm" onClick={() => void insert()} disabled={!isTauri || busy} aria-label="Insert image">
+      <ImagePlus /><span className="hidden @min-[760px]:inline">Image</span>
+    </Button>
+  )
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{isTauri ? btn : <span tabIndex={0} className="inline-flex rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50">{btn}</span>}</TooltipTrigger>
+      <TooltipContent>{isTauri ? 'A PNG or JPEG, as wide as the text. Type a caption between the brackets.' : 'Available in the desktop app'}</TooltipContent>
+    </Tooltip>
   )
 }
 

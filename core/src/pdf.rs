@@ -1,5 +1,5 @@
 //! A small PDF writer for print-ready books: embedded TrueType fonts (searchable text),
-//! vector ornaments, trim and bleed boxes.
+//! vector ornaments, images, trim and bleed boxes, and optional PDF/X-1a:2001 output for printers.
 
 use crate::fonts::{faces, metrics};
 use crate::layout::{Doc, Item, PT_PER_IN};
@@ -15,9 +15,10 @@ struct Writer {
 }
 
 impl Writer {
-    fn new() -> Self {
+    /// `pdfx` writes a 1.3 header (PDF/X-1a:2001 is built on PDF 1.3).
+    fn new(pdfx: bool) -> Self {
         let mut out = Vec::new();
-        out.extend_from_slice(b"%PDF-1.7\n%\xE2\xE3\xCF\xD3\n");
+        out.extend_from_slice(if pdfx { b"%PDF-1.3\n%\xE2\xE3\xCF\xD3\n" } else { b"%PDF-1.7\n%\xE2\xE3\xCF\xD3\n" });
         Writer { out, offsets: vec![0] }
     }
     /// Reserve an object number.
@@ -87,6 +88,62 @@ fn color(c: [u8; 3]) -> String {
     format!("{} {} {}", f(c[0] as f32 / 255.0), f(c[1] as f32 / 255.0), f(c[2] as f32 / 255.0))
 }
 
+/// Neutral greys within this many levels (of 255) count as grey, not colour.
+const NEUTRAL_TOLERANCE: u8 = 3;
+/// In PDF/X, neutrals this dark or darker print as solid black.
+const NEAR_BLACK: f32 = 0.15;
+
+/// True when red, green and blue are (nearly) equal.
+pub fn is_neutral(c: [u8; 3]) -> bool {
+    c.iter().max().unwrap_or(&0) - c.iter().min().unwrap_or(&0) <= NEUTRAL_TOLERANCE
+}
+
+/// Brightness from 0 (black) to 1 (white), by Rec. 601 luma.
+pub fn rgb_to_gray(c: [u8; 3]) -> f32 {
+    (0.299 * c[0] as f32 + 0.587 * c[1] as f32 + 0.114 * c[2] as f32) / 255.0
+}
+
+/// Cyan, magenta, yellow and black, each 0 to 1.
+// ponytail: naive conversion with no ink limit, black generation or profile, so saturated
+// colours print duller than on screen; use an ICC transform (lcms2) if colour accuracy matters.
+pub fn rgb_to_cmyk(c: [u8; 3]) -> [f32; 4] {
+    let [r, g, b] = c.map(|v| v as f32 / 255.0);
+    let k = 1.0 - r.max(g).max(b);
+    if k >= 1.0 {
+        return [0.0, 0.0, 0.0, 1.0];
+    }
+    [(1.0 - r - k) / (1.0 - k), (1.0 - g - k) / (1.0 - k), (1.0 - b - k) / (1.0 - k), k]
+}
+
+/// The fill-colour operator for `c`: `rg`, or in PDF/X (`pdfx`) `g` for neutrals and `k` for the rest.
+// Near-black neutrals (the body ink, #1a1a1a) become `0 g`: as a 90% grey tint they would be
+// halftoned on press and look fuzzy.
+fn fill(c: [u8; 3], pdfx: bool) -> String {
+    paint(c, pdfx, ["rg", "g", "k"])
+}
+
+/// The stroke-colour operator for `c`; see [`fill`].
+fn stroke(c: [u8; 3], pdfx: bool) -> String {
+    paint(c, pdfx, ["RG", "G", "K"])
+}
+
+fn paint(c: [u8; 3], pdfx: bool, ops: [&str; 3]) -> String {
+    if !pdfx {
+        return format!("{} {}", color(c), ops[0]);
+    }
+    if is_neutral(c) {
+        let l = rgb_to_gray(c);
+        return format!("{} {}", f(if l <= NEAR_BLACK { 0.0 } else { l }), ops[1]);
+    }
+    let [c, m, y, k] = rgb_to_cmyk(c);
+    format!("{} {} {} {} {}", f(c), f(m), f(y), f(k), ops[2])
+}
+
+/// The output intent: a registered characterization (CGATS TR 001, SWOP), which PDF/X-1a lets
+/// a file name without embedding an ICC profile. PDF 1.3 has no OutputIntents key, but ISO
+/// 15930-1 requires it here.
+const OUTPUT_INTENT: &str = " /OutputIntents [<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier (CGATS TR 001) /RegistryName (http://www.color.org) /OutputCondition (U.S. Web Coated (SWOP) v2) /Info (CGATS TR 001 - SWOP) >>]";
+
 fn circle_path(cx: f32, cy: f32, r: f32) -> String {
     let k = 0.552_284_8 * r;
     format!(
@@ -99,8 +156,9 @@ fn circle_path(cx: f32, cy: f32, r: f32) -> String {
     )
 }
 
-/// The book as a PDF. `bleed` adds the printer's bleed around the outer edges.
-pub fn write(doc: &Doc, title: &str, author: &str, bleed: bool) -> Vec<u8> {
+/// The book as a PDF. `bleed` adds the printer's bleed around the outer edges; `pdfx` writes
+/// PDF/X-1a:2001 (PDF 1.3, CMYK and grey only, an output intent) for printers that ask for it.
+pub fn write(doc: &Doc, title: &str, author: &str, bleed: bool, pdfx: bool) -> Vec<u8> {
     let b = if bleed { BLEED_IN * PT_PER_IN } else { 0.0 };
     // Which glyphs of which faces are used (for subsetting, widths and copy-paste mapping).
     let mut used: BTreeMap<usize, BTreeMap<u16, char>> = BTreeMap::new();
@@ -115,7 +173,7 @@ pub fn write(doc: &Doc, title: &str, author: &str, bleed: bool) -> Vec<u8> {
             }
         }
     }
-    let mut w = Writer::new();
+    let mut w = Writer::new(pdfx);
     let catalog = w.alloc();
     let pages_id = w.alloc();
     let info = w.alloc();
@@ -193,6 +251,7 @@ pub fn write(doc: &Doc, title: &str, author: &str, bleed: bool) -> Vec<u8> {
     for (face, id) in &font_ids {
         let _ = write!(font_res, "/F{face} {id} 0 R ");
     }
+    let (images, xobj_res) = image_objects(&mut w, doc, pdfx);
     // Pages
     let mut kids = Vec::new();
     let (tw, th) = (doc.w, doc.h);
@@ -213,15 +272,15 @@ pub fn write(doc: &Doc, title: &str, author: &str, bleed: bool) -> Vec<u8> {
                     let skew = if *slant { 0.2 } else { 0.0 };
                     let _ = writeln!(
                         c,
-                        "BT /F{face} {} Tf {} rg {} Tc 1 0 {} 1 {} {} Tm <{hex}> Tj ET",
-                        f(*size), color(*col), f(*spacing), f(skew), f(*x), f(th - *y)
+                        "BT /F{face} {} Tf {} {} Tc 1 0 {} 1 {} {} Tm <{hex}> Tj ET",
+                        f(*size), fill(*col, pdfx), f(*spacing), f(skew), f(*x), f(th - *y)
                     );
                 }
                 Item::Line { x1, y1, x2, y2, width, color: col } => {
-                    let _ = writeln!(c, "{} w {} RG {} {} m {} {} l S", f(*width), color(*col), f(*x1), f(th - y1), f(*x2), f(th - y2));
+                    let _ = writeln!(c, "{} w {} {} {} m {} {} l S", f(*width), stroke(*col, pdfx), f(*x1), f(th - y1), f(*x2), f(th - y2));
                 }
                 Item::Ornament { key, x, y, w: ow, h: oh, color: col } => {
-                    let _ = writeln!(c, "q {} rg {} RG 1 J 1 j", color(*col), color(*col));
+                    let _ = writeln!(c, "q {} {} 1 J 1 j", fill(*col, pdfx), stroke(*col, pdfx));
                     for p in ornaments::placed(key, *x, *y, *ow, *oh) {
                         match p {
                             Prim::Stroke { pts, width, closed } => {
@@ -256,6 +315,11 @@ pub fn write(doc: &Doc, title: &str, author: &str, bleed: bool) -> Vec<u8> {
                     }
                     c.push_str("Q\n");
                 }
+                Item::Image { src, x, y, w: iw, h: ih } => {
+                    if let Some(Some(k)) = images.get(src.as_str()) {
+                        let _ = writeln!(c, "q {} 0 0 {} {} {} cm /Im{k} Do Q", f(*iw), f(*ih), f(*x), f(th - y - ih));
+                    }
+                }
             }
         }
         let content_id = w.alloc();
@@ -267,7 +331,7 @@ pub fn write(doc: &Doc, title: &str, author: &str, bleed: bool) -> Vec<u8> {
         w.obj(
             page_id,
             &format!(
-                "<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 {} {}] /TrimBox {trim} /BleedBox [0 0 {} {}] /Resources << /Font << {font_res}>> >> /Contents {content_id} 0 R >>",
+                "<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 {} {}] /TrimBox {trim} /BleedBox [0 0 {} {}] /Resources << /Font << {font_res}>>{xobj_res} >> /Contents {content_id} 0 R >>",
                 f(media_w), f(media_h), f(media_w), f(media_h)
             ),
         );
@@ -275,14 +339,22 @@ pub fn write(doc: &Doc, title: &str, author: &str, bleed: bool) -> Vec<u8> {
     }
     let kids_s: Vec<String> = kids.iter().map(|k| format!("{k} 0 R")).collect();
     w.obj(pages_id, &format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids_s.join(" "), kids.len()));
-    let lang = if doc.lang.is_empty() { String::new() } else { format!(" /Lang {}", pdf_text_string(&doc.lang)) };
-    w.obj(catalog, &format!("<< /Type /Catalog /Pages {pages_id} 0 R /PageLayout /TwoPageRight{lang} >>"));
+    // /Lang is PDF 1.4, so PDF/X goes without it
+    let lang = if doc.lang.is_empty() || pdfx { String::new() } else { format!(" /Lang {}", pdf_text_string(&doc.lang)) };
+    let intent = if pdfx { OUTPUT_INTENT } else { "" };
+    w.obj(catalog, &format!("<< /Type /Catalog /Pages {pages_id} 0 R /PageLayout /TwoPageRight{lang}{intent} >>"));
     // the details as printed: curly quotes, no markup characters
     let clean = |s: &str| crate::markup::plain(&crate::markup::parse_inline(s, true));
+    let x_info = if pdfx {
+        let now = chrono::Utc::now().format("D:%Y%m%d%H%M%SZ");
+        format!(" /CreationDate ({now}) /ModDate ({now}) /Trapped /False /GTS_PDFXVersion (PDF/X-1:2001) /GTS_PDFXConformance (PDF/X-1a:2001)")
+    } else {
+        String::new()
+    };
     w.obj(
         info,
         &format!(
-            "<< /Title {} /Author {} /Producer {} /Creator {} >>",
+            "<< /Title {} /Author {} /Producer {} /Creator {}{x_info} >>",
             pdf_text_string(&clean(title)),
             pdf_text_string(&clean(author)),
             pdf_text_string(crate::storage::APP_NAME),
@@ -290,6 +362,68 @@ pub fn write(doc: &Doc, title: &str, author: &str, bleed: bool) -> Vec<u8> {
         ),
     );
     w.finish(catalog, info)
+}
+
+/// Each image the pages use, decoded once into an Image XObject (Flate-compressed pixels, any
+/// transparency as a soft mask). Returns the `/Im{k}` number per file (None when it couldn't be
+/// read) and the pages' `/XObject` resource entry.
+fn image_objects<'a>(w: &mut Writer, doc: &'a Doc, pdfx: bool) -> (BTreeMap<&'a str, Option<usize>>, String) {
+    let mut images: BTreeMap<&str, Option<usize>> = BTreeMap::new();
+    let mut res = String::new();
+    for it in doc.pages.iter().flat_map(|p| &p.items) {
+        let Item::Image { src, .. } = it else { continue };
+        if images.contains_key(src.as_str()) {
+            continue;
+        }
+        let Some(r) = crate::image::read(&doc.book_id, src).ok().and_then(|(_, b)| crate::image::decode(&b).ok()) else {
+            images.insert(src, None);
+            continue;
+        };
+        let dict = |cs: &str| format!("/Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /{cs} /BitsPerComponent 8 ", r.w, r.h);
+        if pdfx {
+            let (cs, px) = pdfx_pixels(&r);
+            let id = w.alloc();
+            w.stream(id, &dict(cs), &px, true);
+            let k = images.values().flatten().count();
+            let _ = write!(res, "/Im{k} {id} 0 R ");
+            images.insert(src, Some(k));
+            continue;
+        }
+        let smask = match &r.alpha {
+            Some(a) => {
+                let id = w.alloc();
+                w.stream(id, &dict("DeviceGray"), a, true);
+                format!("/SMask {id} 0 R ")
+            }
+            None => String::new(),
+        };
+        let id = w.alloc();
+        w.stream(id, &format!("{}{smask}", dict(if r.channels == 1 { "DeviceGray" } else { "DeviceRGB" })), &r.pixels, true);
+        let k = images.values().flatten().count();
+        let _ = write!(res, "/Im{k} {id} 0 R ");
+        images.insert(src, Some(k));
+    }
+    let res = if res.is_empty() { res } else { format!(" /XObject << {res}>>") };
+    (images, res)
+}
+
+/// Pixels for PDF/X-1a, which allows no RGB and no transparency: see-through areas are
+/// flattened onto white paper, then the image becomes grey when every pixel is neutral, else CMYK.
+fn pdfx_pixels(r: &crate::image::Raster) -> (&'static str, Vec<u8>) {
+    let n = (r.w * r.h) as usize;
+    let rgb = |i: usize| -> [u8; 3] {
+        let c = if r.channels == 1 { [r.pixels[i]; 3] } else { [r.pixels[3 * i], r.pixels[3 * i + 1], r.pixels[3 * i + 2]] };
+        match &r.alpha {
+            // over white: c * a + 255 * (1 - a)
+            Some(a) => c.map(|v| ((v as u32 * a[i] as u32 + 255 * (255 - a[i] as u32)) / 255) as u8),
+            None => c,
+        }
+    };
+    if r.channels == 1 || (0..n).all(|i| is_neutral(rgb(i))) {
+        return ("DeviceGray", (0..n).map(|i| (rgb_to_gray(rgb(i)) * 255.0).round() as u8).collect());
+    }
+    let px = (0..n).flat_map(|i| rgb_to_cmyk(rgb(i)).map(|v| (v * 255.0).round() as u8)).collect();
+    ("DeviceCMYK", px)
 }
 
 /// The six-capital tag that marks a subset font's name (PDF 9.6.4), stable for its glyphs.
@@ -311,13 +445,8 @@ fn subset_tag(face: usize, glyphs: &BTreeMap<u16, char>) -> String {
 
 #[cfg(test)]
 mod tests {
-    /// Cross-reference offsets point at their objects; catalog, trailer and details are right.
-    #[test]
-    fn structure_is_valid() {
-        let book = crate::sample::sample_book();
-        let doc = crate::layout::typeset(&book, crate::layout::Opts::default());
-        let pdf = super::write(&doc, "It's *Big*", "Ada \"A\" Marlowe", true);
-        let has = |s: &str| pdf.windows(s.len()).any(|w| w == s.as_bytes());
+    /// Check every cross-reference offset points at its object; returns the table.
+    fn xref_table(pdf: &[u8]) -> &str {
         let sx = pdf.windows(10).rposition(|w| w == b"startxref\n").unwrap();
         let tail = std::str::from_utf8(&pdf[sx + 10..]).unwrap();
         let xref: usize = tail.lines().next().unwrap().trim().parse().unwrap();
@@ -329,6 +458,107 @@ mod tests {
             let off: usize = line[..10].parse().unwrap();
             assert!(pdf[off..].starts_with(format!("{i} 0 obj").as_bytes()), "object {i}");
         }
+        table
+    }
+
+    /// Every content stream's operators, decompressed (binary streams such as fonts are skipped).
+    fn content(pdf: &[u8]) -> String {
+        let mut all = String::new();
+        let mut at = 0;
+        while let Some(i) = pdf[at..].windows(10).position(|w| w == b">>\nstream\n") {
+            let start = at + i + 10;
+            let end = start + pdf[start..].windows(10).position(|w| w == b"\nendstream").unwrap();
+            if let Ok(Ok(text)) = miniz_oxide::inflate::decompress_to_vec_zlib(&pdf[start..end]).map(String::from_utf8) {
+                all.push_str(&text);
+            }
+            at = end;
+        }
+        all
+    }
+
+    /// The four numbers after the `page`-th `key` (such as `/TrimBox [`).
+    fn boxes(pdf: &[u8], key: &str, page: usize) -> Vec<f32> {
+        let text = String::from_utf8_lossy(pdf);
+        let at = text.match_indices(key).nth(page).unwrap().0 + key.len();
+        text[at..].split(']').next().unwrap().split(' ').map(|n| n.parse().unwrap()).collect()
+    }
+
+    /// PDF/X-1a: PDF 1.3, the Info and Catalog keys, only grey and CMYK, no 1.4+ keys.
+    #[test]
+    fn pdfx_structure() {
+        let book = crate::sample::sample_book();
+        let doc = crate::layout::typeset(&book, crate::layout::Opts::default());
+        let pdf = super::write(&doc, "Title", "Author", true, true);
+        let has = |s: &str| pdf.windows(s.len()).any(|w| w == s.as_bytes());
+        xref_table(&pdf);
+        assert!(pdf.starts_with(b"%PDF-1.3\n"));
+        for key in [
+            "/Title ", "/Author ", "/CreationDate (D:", "/ModDate (D:", "/Trapped /False", "/GTS_PDFXVersion (PDF/X-1:2001)",
+            "/GTS_PDFXConformance (PDF/X-1a:2001)", "/OutputIntents [<<", "/S /GTS_PDFX", "/OutputConditionIdentifier (CGATS TR 001)",
+            "/RegistryName (http://www.color.org)", "/OutputCondition (", "/Info (", "/ID [<",
+        ] {
+            assert!(has(key), "{key}");
+        }
+        assert!(!has("/Lang") && !has("DeviceRGB") && !has("/SMask"));
+        let ops = content(&pdf);
+        assert!(!ops.contains(" rg") && !ops.contains(" RG"), "RGB operator in X mode");
+        assert!(ops.contains(" 0 g\n") || ops.contains(" 0 g "), "near-black ink should be solid black");
+        assert!(content(&super::write(&doc, "T", "A", true, false)).contains(" rg"));
+    }
+
+    /// PDF/X images: alpha flattened onto white, neutral images grey, colour images CMYK.
+    #[test]
+    fn pdfx_image_pixels() {
+        use crate::image::Raster;
+        let grey = Raster { w: 2, h: 1, channels: 3, pixels: vec![0, 0, 0, 200, 200, 200], alpha: Some(vec![0, 255]) };
+        assert_eq!(super::pdfx_pixels(&grey), ("DeviceGray", vec![255, 200])); // see-through black is white paper
+        let red = Raster { w: 1, h: 1, channels: 3, pixels: vec![255, 0, 0], alpha: None };
+        assert_eq!(super::pdfx_pixels(&red), ("DeviceCMYK", vec![0, 255, 255, 0]));
+        let one = Raster { w: 1, h: 1, channels: 1, pixels: vec![10], alpha: Some(vec![255]) };
+        assert_eq!(super::pdfx_pixels(&one), ("DeviceGray", vec![10]));
+    }
+
+    /// Near-black neutrals are solid black, other neutrals grey, colours CMYK; normal mode is RGB.
+    #[test]
+    fn colour_operators() {
+        assert_eq!(super::fill([0x1a; 3], true), "0 g");
+        assert_eq!(super::stroke([0x1a; 3], true), "0 G");
+        assert_eq!(super::fill([0x1a; 3], false), "0.102 0.102 0.102 rg");
+        assert_eq!(super::fill([255; 3], true), "1 g");
+        assert_eq!(super::fill([128; 3], true), "0.502 g");
+        assert_eq!(super::fill([255, 0, 0], true), "0 1 1 0 k");
+        assert_eq!(super::stroke([0, 0, 0], true), "0 G");
+        assert_eq!(super::fill([0, 0, 255], false), "0 0 1 rg");
+    }
+
+    /// Every page has a trim box inside a bleed box inside the media box, with bleed only above,
+    /// below and on the outside edge.
+    #[test]
+    fn boxes_nest() {
+        let book = crate::sample::sample_book();
+        let doc = crate::layout::typeset(&book, crate::layout::Opts::default());
+        let b = super::BLEED_IN * crate::layout::PT_PER_IN;
+        for bleed in [false, true] {
+            let pdf = super::write(&doc, "T", "A", bleed, false);
+            for (i, page) in doc.pages.iter().enumerate() {
+                let (m, bl, t) = (boxes(&pdf, "/MediaBox [", i), boxes(&pdf, "/BleedBox [", i), boxes(&pdf, "/TrimBox [", i));
+                assert!(m[0] <= bl[0] && m[1] <= bl[1] && bl[2] <= m[2] && bl[3] <= m[3], "bleed in media, page {i}");
+                assert!(bl[0] <= t[0] && bl[1] <= t[1] && t[2] <= bl[2] && t[3] <= bl[3], "trim in bleed, page {i}");
+                assert!((t[2] - t[0] - doc.w).abs() < 0.01 && (t[3] - t[1] - doc.h).abs() < 0.01, "trim size, page {i}");
+                let want = if !bleed { [0.0; 4] } else { [if page.recto { 0.0 } else { b }, b, if page.recto { b } else { 0.0 }, b] };
+                let got = [t[0] - m[0], t[1] - m[1], m[2] - t[2], m[3] - t[3]];
+                assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 0.01), "page {i}: {got:?} vs {want:?}");
+            }
+        }
+    }
+    /// Cross-reference offsets point at their objects; catalog, trailer and details are right.
+    #[test]
+    fn structure_is_valid() {
+        let book = crate::sample::sample_book();
+        let doc = crate::layout::typeset(&book, crate::layout::Opts::default());
+        let pdf = super::write(&doc, "It's *Big*", "Ada \"A\" Marlowe", true, false);
+        let has = |s: &str| pdf.windows(s.len()).any(|w| w == s.as_bytes());
+        let table = xref_table(&pdf);
         assert!(has(&format!("/Lang {}", super::pdf_text_string("en"))));
         assert!(table.contains("/ID [<"));
         assert!(has(&super::pdf_text_string("It’s Big")) && has(&super::pdf_text_string("Ada “A” Marlowe")));
@@ -344,13 +574,14 @@ mod tests {
         assert!(doc.pages.len() >= 8, "pages: {}", doc.pages.len());
         let dir = std::env::temp_dir().join("bookbinder-selftest");
         std::fs::create_dir_all(&dir).unwrap();
-        let pdf = super::write(&doc, &book.meta.title, &book.meta.author, false);
+        let pdf = super::write(&doc, &book.meta.title, &book.meta.author, false, false);
         assert!(pdf.starts_with(b"%PDF-1.7"));
         std::fs::write(dir.join("print.pdf"), &pdf).unwrap();
-        std::fs::write(dir.join("bleed.pdf"), super::write(&doc, &book.meta.title, &book.meta.author, true)).unwrap();
+        std::fs::write(dir.join("bleed.pdf"), super::write(&doc, &book.meta.title, &book.meta.author, true, false)).unwrap();
+        std::fs::write(dir.join("print-x.pdf"), super::write(&doc, &book.meta.title, &book.meta.author, true, true)).unwrap();
         let lp = crate::layout::typeset(&book, crate::layout::Opts { large_print: true });
         assert!(lp.pages.len() > doc.pages.len());
-        std::fs::write(dir.join("large.pdf"), super::write(&lp, &book.meta.title, &book.meta.author, false)).unwrap();
+        std::fs::write(dir.join("large.pdf"), super::write(&lp, &book.meta.title, &book.meta.author, false, false)).unwrap();
         for t in [crate::model::EbookTarget::Kindle, crate::model::EbookTarget::Apple, crate::model::EbookTarget::Generic] {
             let e = crate::epub::write(&book, t).unwrap();
             std::fs::write(dir.join(format!("{}.epub", t.label())), &e.bytes).unwrap();

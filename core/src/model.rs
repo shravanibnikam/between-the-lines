@@ -111,7 +111,9 @@ pub struct Section {
     pub title: String,
     pub subtitle: String,
     /// The text, one paragraph per line. `*italic*`, `**bold**`, a line with `***` is a
-    /// scene break, `> ` starts a block quote, `## ` a subheading.
+    /// scene break, `> ` starts a block quote, `## ` a subheading, `![caption](name.png)` is an
+    /// image from the book's `images/` folder. Lines starting with `|` are a table, `[^label]`
+    /// calls a footnote and a line `[^label]: text` defines it.
     pub text: String,
     /// Point-of-view character shown under the chapter title (if the design shows it).
     pub pov: String,
@@ -173,6 +175,8 @@ pub struct BookMeta {
     pub language: String,
     pub description: String,
     pub keywords: String,
+    /// The ebook cover: a file name in the book's `images/` folder, empty for none.
+    pub cover: String,
 }
 
 impl Default for BookMeta {
@@ -192,6 +196,7 @@ impl Default for BookMeta {
             language: "en".into(),
             description: String::new(),
             keywords: String::new(),
+            cover: String::new(),
         }
     }
 }
@@ -447,6 +452,8 @@ pub struct PrintSettings {
     pub margin_inside_in: f32,
     pub margin_outside_in: f32,
     pub bleed: bool,
+    /// Write the print PDF as PDF/X-1a:2001 (CMYK and grey only), as some printers ask.
+    pub pdfx: bool,
     pub page_numbers: bool,
     pub page_number_pos: PageNumberPos,
     pub running_headers: bool,
@@ -469,6 +476,7 @@ impl Default for PrintSettings {
             margin_inside_in: crate::themes::DEFAULT_MARGIN_INSIDE_IN,
             margin_outside_in: crate::themes::DEFAULT_MARGIN_OUTSIDE_IN,
             bleed: false,
+            pdfx: false,
             page_numbers: true,
             page_number_pos: PageNumberPos::BottomCenter,
             running_headers: true,

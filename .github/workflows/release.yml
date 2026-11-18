@@ -48,20 +48,57 @@ jobs:
       - run: npm ci
         working-directory: studio
 
+      # Signing is optional: each credential below is used only when its secret is set, so a
+      # fork without secrets still builds (unsigned). See CONTRIBUTING.md, "Signing releases".
+      - name: Use signing credentials that are configured
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          TRUSTED_SIGNING_ENDPOINT: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+          TRUSTED_SIGNING_ACCOUNT: ${{ secrets.TRUSTED_SIGNING_ACCOUNT }}
+          TRUSTED_SIGNING_PROFILE: ${{ secrets.TRUSTED_SIGNING_PROFILE }}
+        run: |
+          pass() { for v in "$@"; do printf '%s<<__END__\n%s\n__END__\n' "$v" "${!v}" >> "$GITHUB_ENV"; done; }
+          if [ "$RUNNER_OS" = macOS ] && [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_SIGNING_IDENTITY" ]; then
+            pass APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY
+            if [ -n "$APPLE_ID" ]; then
+              pass APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
+              echo "macOS: signing with a Developer ID certificate and notarizing"
+            else
+              echo "macOS: signing with a Developer ID certificate (not notarized: no APPLE_ID)"
+            fi
+          elif [ "$RUNNER_OS" = macOS ]; then
+            # ad-hoc: without any signature Apple silicon reports the download as "damaged"
+            echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+            echo "macOS: no certificate configured, the app is ad-hoc signed"
+          fi
+          if [ "$RUNNER_OS" = Windows ] && [ -n "$AZURE_CLIENT_SECRET" ] && [ -n "$TRUSTED_SIGNING_ACCOUNT" ]; then
+            pass AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID
+            cargo install trusted-signing-cli --locked
+            jq -n --arg e "$TRUSTED_SIGNING_ENDPOINT" --arg a "$TRUSTED_SIGNING_ACCOUNT" --arg c "$TRUSTED_SIGNING_PROFILE" \
+              '{bundle: {windows: {signCommand: {cmd: "trusted-signing-cli", args: ["-e", $e, "-a", $a, "-c", $c, "-d", "Between the Lines", "%1"]}}}}' \
+              > "$RUNNER_TEMP/sign.json"
+            echo "SIGN_ARGS=--config $RUNNER_TEMP/sign.json" >> "$GITHUB_ENV"
+            echo "Windows: signing with Azure Trusted Signing"
+          elif [ "$RUNNER_OS" = Windows ]; then
+            echo "Windows: no signing configured, SmartScreen will warn on first run"
+          fi
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Unsigned for now. To sign/notarize macOS builds, add these secrets and uncomment:
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: studio
           tagName: ${{ github.ref_name }}
           releaseName: Between the Lines ${{ github.ref_name }}
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} ${{ env.SIGN_ARGS }}

@@ -12,5 +12,6 @@ pub mod themes;
 pub mod ornaments;
 pub mod sample;
 pub mod svg;
+pub mod image;
 pub mod preflight;
 pub mod api;

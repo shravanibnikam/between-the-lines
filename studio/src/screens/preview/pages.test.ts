@@ -22,3 +22,13 @@ test('spreadLabel counts physical pages from one', () => {
   assert.equal(spreadLabel(10, 2), 'Pages 4–5')
   assert.equal(spreadLabel(0, 0), 'No pages')
 })
+
+test('even page counts end on a lone left page; zero pages still have one (empty) spread', () => {
+  assert.deepEqual(spreadPages(4, 1), [1, 2])
+  assert.deepEqual(spreadPages(4, 2), [3, null])
+  assert.equal(spreadCount(4), 3)
+  assert.equal(spreadCount(0), 1)
+  assert.equal(spreadLabel(4, 2), 'Page 4')
+  assert.equal(spreadLabel(1, 0), 'Page 1')
+  assert.equal(spreadLabel(0, 1), 'No pages')
+})

@@ -150,6 +150,8 @@ const CASES: PMNode[] = [
 const TEXTS = [
   'One.\nTwo *italic* and **bold** and ***both***.\n***\n## Sub\n### Minor\n> A quote\n> Second line',
   'Literal \\* star and \\_ under and \\\\ slash.\n\\# not heading\n\\> not quote\n\\---',
+  // tables and footnotes are plain lines here (core/src/markup.rs `parse_section` reads them)
+  '| River | *Charted* |\n|---|:--:|\n| Vey[^my\\_note] | 9 |\nText[^1] here.\n[^1]: A *note*.\n[^my\\_note]: Small.',
 ]
 
 export async function selfCheck(parse: Parse): Promise<string[]> {

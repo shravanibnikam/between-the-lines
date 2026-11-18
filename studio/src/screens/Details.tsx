@@ -1,5 +1,5 @@
-import { X } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { ImagePlus, X } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { Field, Pill, ScreenHeader, SettingsSection, SwitchRow } from '@/components/kit'
 import {
@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { api } from '@/lib/api'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { api, isTauri, pickImage } from '@/lib/api'
 import { bookWords, countWords, fmt } from '@/lib/book'
 import type { BookMeta, Terminology } from '@/lib/types'
 import { useStore } from '@/state/context'
@@ -77,6 +78,65 @@ function Language() {
   )
 }
 
+/** The ebook cover: a thumbnail of the chosen image, and buttons to choose or remove it. */
+function Cover() {
+  const { book, updateBook } = useStore()
+  const { id, meta: { cover } } = book!
+  const [busy, setBusy] = useState(false)
+  const [retry, setRetry] = useState(0)
+  const [img, setImg] = useState<{ key: string; src: string | null }>({ key: '', src: null })
+  const key = `${id}/${cover}/${retry}`
+  useEffect(() => {
+    if (!cover) return
+    let dead = false
+    api.imageData(id, cover).then((src) => { if (!dead) setImg({ key, src }) }, () => { if (!dead) setImg({ key, src: null }) })
+    return () => { dead = true }
+  }, [id, cover, key])
+  const shown = cover && img.key === key ? img.src : null
+  const failed = !!cover && img.key === key && !img.src
+
+  const choose = async () => {
+    setBusy(true)
+    try {
+      const added = await pickImage(id)
+      if (added) updateBook((d) => { d.meta.cover = added.name })
+    } catch (e) {
+      toast.error("Couldn't add that image", { description: String(e) })
+    } finally {
+      setBusy(false)
+    }
+  }
+  const pick = (
+    <Button variant="outline" onClick={() => void choose()} disabled={!isTauri || busy}>
+      <ImagePlus /> {cover ? 'Change image…' : 'Choose image…'}
+    </Button>
+  )
+
+  return (
+    <SettingsSection title="Cover" description="The front cover ebook stores and readers show. A JPEG or PNG about 1600 × 2560 pixels works everywhere.">
+      <div className="flex items-start gap-5">
+        <div className="grid aspect-5/8 w-30 shrink-0 place-items-center overflow-hidden rounded-md bg-card ring-1 ring-border">
+          {shown
+            ? <img src={shown} alt="The book's cover" className="size-full object-cover" />
+            : <span className="px-3 text-center text-[12px] text-muted-foreground">{cover ? (failed ? '—' : '') : 'No cover yet'}</span>}
+        </div>
+        <div className="flex flex-col items-start gap-2">
+          <div className="flex gap-2">
+            {isTauri ? pick : (
+              <Tooltip>
+                <TooltipTrigger asChild><span tabIndex={0} className="inline-flex rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50">{pick}</span></TooltipTrigger>
+                <TooltipContent>Available in the desktop app</TooltipContent>
+              </Tooltip>
+            )}
+            {cover && <Button variant="ghost" onClick={() => updateBook((d) => { d.meta.cover = '' })}>Remove</Button>}
+          </div>
+          {failed && <p className="text-[13px] text-muted-foreground">The cover image couldn't be loaded. <Button variant="ghost" size="xs" onClick={() => setRetry((r) => r + 1)}>Retry</Button></p>}
+        </div>
+      </div>
+    </SettingsSection>
+  )
+}
+
 const TERMS: [keyof Terminology, string][] = [
   ['chapter', 'Chapter'], ['part', 'Part'], ['prologue', 'Prologue'], ['epilogue', 'Epilogue'], ['contents', 'Contents'],
 ]
@@ -136,6 +196,8 @@ export function Details() {
           <MetaField k="subtitle" label="Subtitle" hint="Optional" />
           <MetaField k="author" label="Author" hint="The name as it should appear, such as your pen name." />
         </SettingsSection>
+
+        <Cover />
 
         <SettingsSection title="Series" description="Leave empty for a standalone book.">
           <div className="grid gap-4 sm:grid-cols-[1fr_120px]">

@@ -2,7 +2,7 @@
 // command; in a plain browser (`npm run dev` + the core's dev server) it posts to
 // http://127.0.0.1:1421/call, so the same screens can be checked with real data.
 import type {
-  Block, Book, Catalog, Check, DocInfo, ExportFile, ExportKind, ExportResult, ImportResult, LayoutMode, Settings, Snapshot, Summary,
+  Block, Book, Catalog, Check, DocInfo, ExportFile, ExportKind, ExportResult, ImageInfo, ImportResult, LayoutMode, Settings, Snapshot, Summary,
 } from './types'
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -50,6 +50,11 @@ export const api = {
   exportsList: (id: string) => call<ExportFile[]>('exports_list', { id }),
   copyFile: (src: string, dest: string) => call<void>('copy_file', { src, dest }),
 
+  /** Copies a PNG or JPEG into the book's images folder under a new, safe name. */
+  imageAdd: (book: string, path: string) => call<ImageInfo>('image_add', { book, path }),
+  /** One of the book's images as a data: URI (the window loads images only inline). */
+  imageData: (book: string, name: string) => call<string>('image_data', { book, name }),
+
   markupBlocks: (text: string) => call<Block[]>('markup_blocks', { text }),
   spellMisspelled: (text: string, extra: string[]) => call<string[]>('spell_misspelled', { text, extra }),
   spellSuggest: (word: string) => call<string[]>('spell_suggest', { word }),
@@ -60,3 +65,11 @@ export const api = {
 }
 
 export const isTauri = inTauri
+
+/** Ask for a PNG or JPEG and copy it into the book; null if cancelled or outside the desktop app. */
+export async function pickImage(book: string): Promise<ImageInfo | null> {
+  if (!inTauri) return null
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const p = await open({ filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg'] }] })
+  return typeof p === 'string' ? api.imageAdd(book, p) : null
+}
