@@ -50,7 +50,8 @@ updates as you type, with spell checking, daily and book word goals, and snapsho
 Three switches in the editor toolbar, which you can combine however you like:
 
 - **Typewriter:** the line you're typing stays a third of the way down the screen, so your eyes
-  never chase the cursor to the bottom of the page.
+  never chase the cursor to the bottom of the page. Each key clacks like a typewriter's, with a
+  bell and carriage return on Enter. Turn this off with **Sound**.
 - **Dim:** every paragraph except the one you're writing fades back, so the sentence in front of
   you is the only thing asking for attention.
 - **Focus:** the sidebar, outline and panels disappear, leaving just you and the page. Turn on

@@ -3,7 +3,7 @@
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { EditorState } from '@tiptap/pm/state'
-import { Bold, Focus, ImagePlus, Italic, Minus, SunDim, TextCursorInput } from 'lucide-react'
+import { Bold, Focus, ImagePlus, Italic, Minus, SunDim, TextCursorInput, Volume2 } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { Bar } from '@/components/kit'
@@ -21,6 +21,7 @@ import { fontStack } from '@/lib/fonts'
 import type { Area, Section } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/state/context'
+import { playStroke, strokeFor } from './keysound'
 import { fromBlocks, toLines } from './markup'
 import { spellKey, WriteDecorations } from './plugins'
 
@@ -238,6 +239,19 @@ export function EditorColumn({ section, area, index, misspelled, onAddWord, onIg
       editor.off('focus', keep)
     }
   }, [editor, typewriter, carriage])
+
+  // Typewriter sounds: each key typed in the text makes its own sound.
+  const sound = typewriter && settings.typewriter_sound
+  useEffect(() => {
+    if (!editor || !sound) return
+    const dom = editor.view.dom
+    const onKey = (e: KeyboardEvent) => {
+      const s = strokeFor(e)
+      if (s && editor.isEditable) playStroke(s, e.code, e.key)
+    }
+    dom.addEventListener('keydown', onKey)
+    return () => dom.removeEventListener('keydown', onKey)
+  }, [editor, sound])
 
   // Carriage: slide the text so the caret sits mid-screen on the rail; typing hides the toolbar.
   useEffect(() => {
@@ -506,6 +520,7 @@ function Toolbar({ editor, words, page, end, focus, onFocus }: {
       )}
       <div className="ml-auto flex items-center gap-1">
         <TextToggle label="Typewriter" hint="Keep the line you're typing a third of the way down" pressed={settings.typewriter} onChange={(v) => setSettings({ typewriter: v })}><TextCursorInput /></TextToggle>
+        {settings.typewriter && <TextToggle label="Sound" hint="Typewriter sounds as you type" pressed={settings.typewriter_sound} onChange={(v) => setSettings({ typewriter_sound: v })}><Volume2 /></TextToggle>}
         <TextToggle label="Dim" hint="Dim every paragraph but the one you're in" pressed={settings.dim_others} onChange={(v) => setSettings({ dim_others: v })}><SunDim /></TextToggle>
         <TextToggle label="Focus" hint={focus ? 'Leave focus (Esc)' : 'Hide everything but the page'} pressed={focus} onChange={onFocus}><Focus /></TextToggle>
         {words !== null && <span className="num ml-2 hidden text-[13px] whitespace-nowrap text-muted-foreground @min-[440px]:inline">{fmt(words)} words</span>}
@@ -604,6 +619,10 @@ function TypeHead({ onDone, onExit }: { onDone: () => void; onExit: () => void }
         <label className="flex items-center justify-between text-[13px]">
           Typewriter type
           <Switch checked={settings.typewriter_font} onCheckedChange={(v) => setSettings({ typewriter_font: v })} />
+        </label>
+        <label className="flex items-center justify-between text-[13px]">
+          Key sounds
+          <Switch checked={settings.typewriter_sound} onCheckedChange={(v) => setSettings({ typewriter_sound: v })} />
         </label>
         <label className="flex items-center justify-between text-[13px]">
           Dim other paragraphs

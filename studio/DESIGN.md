@@ -110,8 +110,8 @@ stays mid-screen on the rail; earlier lines rise above it and fade; nothing show
 (the type head, its last dot in the accent) sits on the rail under the caret and casts the lamp: a
 short spotlight, narrow at the pill and widening upward over the typing line and the two above it
 (cream, not amber) and a short spill below, brightness and warmth from the lamp settings (kept faint
-in dark so light text stays readable). The pill is the only control: lamp, typewriter type, dim,
-Leave focus. The toolbar fades out on typing and back in on mouse movement; Esc leaves.
+in dark so light text stays readable). The pill is the only control: lamp, typewriter type, key
+sounds, dim, Leave focus. The toolbar fades out on typing and back in on mouse movement; Esc leaves.
 
 ## Motion
 

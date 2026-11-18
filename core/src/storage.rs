@@ -280,6 +280,8 @@ pub struct Settings {
     pub lamp_warmth: f32,
     /// Write in a typewriter-style (monospaced) face.
     pub typewriter_font: bool,
+    /// With Typewriter on, keys make typewriter sounds.
+    pub typewriter_sound: bool,
     /// Interface accent preset (see studio/src/index.css); unknown names fall back to raspberry.
     pub accent: String,
 }
@@ -296,6 +298,7 @@ impl Default for Settings {
             lamp_brightness: 0.8,
             lamp_warmth: 0.6,
             typewriter_font: true,
+            typewriter_sound: true,
             accent: "raspberry".into(),
         }
     }

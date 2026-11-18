@@ -146,7 +146,7 @@ fn end_to_end() {
     // ---- settings and the sample book ----
     let st = ok(&api, "settings_get", json!({}));
     assert_eq!(st["sample_created"], json!(true));
-    for k in ["dark", "editor_size", "last_book", "typewriter", "dim_others", "lamp_brightness", "lamp_warmth", "typewriter_font", "accent"] {
+    for k in ["dark", "editor_size", "last_book", "typewriter", "dim_others", "lamp_brightness", "lamp_warmth", "typewriter_font", "typewriter_sound", "accent"] {
         assert!(st.get(k).is_some(), "settings lacks {k}");
     }
     let mut st2 = st.clone();
