@@ -13,7 +13,10 @@ pub fn app_dir() -> PathBuf {
     // worked out once per run, so two first calls can't race the move below
     static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
     DIR.get_or_init(|| {
-        let base = dirs::data_dir().or_else(dirs::home_dir).unwrap_or_else(|| PathBuf::from("."));
+        // In the Flatpak $XDG_DATA_HOME is the sandbox's own folder. The sandbox is given
+        // ~/.local/share/Between the Lines (studio/flatpak/build.sh), so every package shares one library.
+        let flatpak = std::env::var_os("FLATPAK_ID").and_then(|_| dirs::home_dir()).map(|h| h.join(".local/share"));
+        let base = flatpak.or_else(dirs::data_dir).or_else(dirs::home_dir).unwrap_or_else(|| PathBuf::from("."));
         let dir = base.join(APP_NAME);
         // The app used to be called Bookbinder: move an existing library across once, and keep
         // using the old folder if it can't be moved so no books go missing.

@@ -93,6 +93,7 @@ jobs:
           fi
 
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # action-v0.6.2
+        id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -102,3 +103,17 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }} ${{ env.SIGN_ARGS }}
+
+      # The same Linux build as a Flatpak (studio/flatpak/build.sh), added to the draft release.
+      - name: Build the Flatpak
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.tauri.outputs.appVersion }}
+        run: |
+          sudo apt-get install -y -qq flatpak
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.gnome.Platform//51
+          name="Between.the.Lines_${VERSION}_x86_64.flatpak"
+          studio/flatpak/build.sh target/release/bookbinder-studio "$PWD/$name"
+          gh release upload "$GITHUB_REF_NAME" "$name" --clobber
