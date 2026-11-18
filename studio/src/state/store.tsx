@@ -258,7 +258,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         e.preventDefault()
         await writeSettings()
         if (await saveNow()) await win.destroy()
-        else toast.error(SAVE_FAILED)
+        else toast.error(SAVE_FAILED, { action: { label: 'Close anyway', onClick: () => void win.destroy() } })
       })
     })()
     return () => unlisten?.()
