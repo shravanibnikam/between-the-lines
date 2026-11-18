@@ -91,3 +91,7 @@
   .demo-format button { transition: none; }
   .demo-format button:active { transform: none; }
 }
+
+@media (pointer: coarse) {
+  .demo-format textarea { font-size: 16px; }
+}

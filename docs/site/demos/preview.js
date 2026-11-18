@@ -345,14 +345,17 @@
       centreThumb();
     }
 
+    // aria-disabled keeps focus on the button at the limit (a real disabled one would drop it to body).
+    function dis(b, on) { if (on) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled'); }
+
     function status() {
       if (mode === 'ebook') {
         at.textContent = `Screen ${eIdx + 1} of ${eCount}`;
         label.textContent = `Ebook · phone · reflowable · ${eCount} screens at ${ESIZES[eSize]} px`;
         diff.hidden = true;
-        prev.disabled = eIdx === 0; next.disabled = eIdx >= eCount - 1;
+        dis(prev, eIdx === 0); dis(next, eIdx >= eCount - 1);
         prev.setAttribute('aria-label', 'Previous screen'); next.setAttribute('aria-label', 'Next screen');
-        sizes.children[0].disabled = eSize === 0; sizes.children[1].disabled = eSize === ESIZES.length - 1;
+        dis(sizes.children[0], eSize === 0); dis(sizes.children[1], eSize === ESIZES.length - 1);
         return;
       }
       const b = book(mode), [l, r] = b.spreads[spread], n = b.pages.length;
@@ -362,7 +365,7 @@
       const pr = book('print'), extra = n - pr.pages.length;
       diff.hidden = mode !== 'large';
       diff.textContent = `${extra >= 0 ? '+' : '−'}${Math.abs(extra)} pages · the story runs ${story(b)} pages, ${story(pr)} in print`;
-      prev.disabled = spread === 0; next.disabled = spread >= b.spreads.length - 1;
+      dis(prev, spread === 0); dis(next, spread >= b.spreads.length - 1);
       prev.setAttribute('aria-label', 'Previous pages'); next.setAttribute('aria-label', 'Next pages');
     }
 
@@ -479,7 +482,7 @@
 
     root.addEventListener('click', e => {
       const t = e.target.closest('button');
-      if (!t || !ready) return;
+      if (!t || !ready || t.getAttribute('aria-disabled') === 'true') return;
       if (t.dataset.mode && t.dataset.mode !== mode) setMode(t.dataset.mode);
       else if (t.dataset.step) { const d = +t.dataset.step; if (mode === 'ebook') goEbook(eIdx + d); else go(spread + d); }
       else if (t.dataset.size) resize(+t.dataset.size);

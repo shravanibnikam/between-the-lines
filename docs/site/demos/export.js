@@ -126,12 +126,12 @@
     var fileRows = h('div', { role: 'rowgroup' });
     var status = h('p', { class: 'x-sr', role: 'status' });
     var screen = h('div', { class: 'x-screen' },
-      h('div', { class: 'x-top' }, h('h4', { class: 'x-h1', text: 'Export' }), h('span', { class: 'x-demo', text: 'Demo · no file is created' })),
+      h('div', { class: 'x-top' }, h('div', { class: 'x-h1', text: 'Export' }), h('span', { class: 'x-demo', text: 'Demo · no file is created' })),
       sub,
       h('section', { class: 'x-sec', 'aria-labelledby': id + 'pre' },
-        h('div', { class: 'x-h2row' }, h('h5', { id: id + 'pre', class: 'x-h2', text: 'Before you publish' }), summary), checks),
-      h('section', { class: 'x-sec', 'aria-labelledby': id + 'fmt' }, h('h5', { id: id + 'fmt', class: 'x-h2', text: 'Formats' }), formatList),
-      h('section', { class: 'x-sec', 'aria-labelledby': id + 'files' }, h('h5', { id: id + 'files', class: 'x-h2', text: 'Files' }),
+        h('div', { class: 'x-h2row' }, h('div', { id: id + 'pre', class: 'x-h2', text: 'Before you publish' }), summary), checks),
+      h('section', { class: 'x-sec', 'aria-labelledby': id + 'fmt' }, h('div', { id: id + 'fmt', class: 'x-h2', text: 'Formats' }), formatList),
+      h('section', { class: 'x-sec', 'aria-labelledby': id + 'files' }, h('div', { id: id + 'files', class: 'x-h2', text: 'Files' }),
         h('div', { class: 'x-table', role: 'table', 'aria-labelledby': id + 'files' },
           h('div', { role: 'rowgroup' }, h('div', { class: 'x-row x-head', role: 'row' },
             h('span', { role: 'columnheader', text: 'Name' }), h('span', { role: 'columnheader', class: 'x-num', text: 'Size' }),

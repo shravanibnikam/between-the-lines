@@ -10,7 +10,7 @@
   text-align: left;
 }
 .demo-export *, .demo-export *::before, .demo-export *::after { box-sizing: border-box; }
-.demo-export p, .demo-export h4, .demo-export h5, .demo-export ul { margin: 0; padding: 0; }
+.demo-export p, .demo-export ul { margin: 0; padding: 0; }
 .demo-export ul { list-style: none; }
 .demo-export [hidden] { display: none !important; }
 
@@ -109,4 +109,8 @@
   .demo-export .x-spin { animation: none; border-right-color: currentColor; opacity: .6; }
   .demo-export .x-new { animation: none; }
   .demo-export .x-track, .demo-export .x-track::after, .demo-export .x-btn { transition: none; }
+}
+
+@media (pointer: coarse) {
+  .demo-export input[type="text"], .demo-export select { font-size: 16px; }
 }

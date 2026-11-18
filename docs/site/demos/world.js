@@ -181,12 +181,15 @@
     function renderList() {
       var by = {}; entries.forEach(function (e) { by[e.kind] = (by[e.kind] || 0) + 1; });
       if (state.kind !== 'all' && !by[state.kind]) state.kind = 'all';
+      var kf = chips.contains(document.activeElement) ? document.activeElement.dataset.kind : null;
       chips.textContent = '';
       [['all', 'All', 'All']].concat(KINDS.filter(function (k) { return by[k[0]]; })).forEach(function (k) {
-        chips.append(h('button', { type: 'button', class: 'w-chip', 'aria-pressed': String(state.kind === k[0]),
+        chips.append(h('button', { type: 'button', class: 'w-chip', 'data-kind': k[0], 'aria-pressed': String(state.kind === k[0]),
           on: { click: function () { state.kind = k[0]; renderList(); } } },
           k[2] + ' ', h('span', { class: 'w-num', text: k[0] === 'all' ? entries.length : by[k[0]] })));
       });
+
+      if (kf) { var fc = chips.querySelector('[data-kind="' + kf + '"]') || chips.firstChild; if (fc) fc.focus(); }
 
       var q = state.q;
       var shown = entries.filter(function (e) {

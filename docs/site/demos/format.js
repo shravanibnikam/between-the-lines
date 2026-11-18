@@ -193,7 +193,7 @@
         </div>
         <div class="fmt-out">
           <div class="fmt-bar"><span>In print</span><span class="fmt-hint">updates as you type</span></div>
-          <div class="fmt-paper" lang="en" aria-live="polite" aria-label="The typeset page" tabindex="0"></div>
+          <div class="fmt-paper" role="region" lang="en" aria-live="polite" aria-label="The typeset page" tabindex="0"></div>
         </div>
       </div>`;
     const ta = root.querySelector('textarea'), paper = root.querySelector('.fmt-paper'), tryRow = root.querySelector('.fmt-try');

@@ -47,7 +47,7 @@ Outside, in the dark, the Tamsel went on climbing.` },
   /* ---------- Typesetting: the writing format into page HTML ---------- */
   const quotes = s => s.replace(/(^|[\s(—])"/g, '$1“').replace(/"/g, '”').replace(/(^|[\s(—])'/g, '$1‘').replace(/'/g, '’');
   function md(src, d, { open = true } = {}) {
-    const notes = {}, order = [];
+    const notes = Object.create(null), order = [];
     const lines = src.split('\n').filter(l => {
       const m = l.match(/^\[\^([^\]]+)\]:\s*(.*)$/);
       if (m) notes[m[1]] = m[2];

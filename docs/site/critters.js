@@ -167,6 +167,7 @@
     const next = [];
     const add = (r, pad) => { if (r.width && r.height) next.push([r.left - pad, r.top + scrollY - pad, r.right + pad, r.bottom + scrollY + pad]); };
     document.querySelectorAll('h1 .rise, h2, h3, p, dt, dd, li, label, .hint').forEach(el => {
+      if (el.closest('[data-ui]')) return;
       const rg = document.createRange(); rg.selectNodeContents(el);
       for (const r of rg.getClientRects()) add(r, 16);
     });
@@ -241,6 +242,7 @@
           o.o += (o.open - o.o) * .04;
           bloom(g, o.x, vy, o.S * (.75 + .25 * o.o), t, o.o, (.55 + o.o * .4) * fadeFor(o, o.x, o.y, o.S), o.ph);
         } else if (o.k === 'spark') {
+          if (inHole(o.x, o.y)) continue;
           const tw = (Math.sin(t * 1.6 + o.ph) + 1) / 2;
           spark(g, o.x, vy, 3 + tw * 4, .15 + tw * .5 + (near < 160 ? .3 : 0), o.ci);
         }
@@ -324,7 +326,7 @@
       document.body.append(l);
       lastX = px; lastY = py;
     }
-    const t = e.target, field = t.closest('input, textarea, [contenteditable]');
+    const t = e.target, field = t.closest('input:not([type=range]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), textarea, [contenteditable]');
     document.documentElement.classList.toggle('cur-text', !!field);
     ringEl.classList.toggle('hot', !field && !!t.closest('a, button, select, .chip, canvas[data-ascii-mark], .ltr'));
   }, { passive: true });

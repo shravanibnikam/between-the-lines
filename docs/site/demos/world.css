@@ -168,3 +168,7 @@
   .demo-world .w-bar > span { transition: none; }
   .demo-world button:active:not(:disabled) { transform: none; }
 }
+
+@media (pointer: coarse) {
+  .demo-world input[type="text"], .demo-world input[type="search"], .demo-world select { font-size: 16px; }
+}
