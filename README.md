@@ -250,4 +250,5 @@ Have an idea or found a bug? [Open an issue](https://github.com/shravanibnikam/b
 
 The bundled fonts are under the [SIL Open Font License 1.1](core/assets/fonts/FONTS.md), and the
 English dictionary comes from [SCOWL](core/assets/dictionaries/README_en_US.txt) under its own
-permissive licence. Books you make with Between the Lines are entirely yours.
+permissive licence. The typewriter sounds are cut from recordings by Work With Sounds / Konrad
+Gutkowski (CC BY 4.0) and _stubb (CC0); see [their credits](studio/src/screens/write/sounds/README.md). Books you make with Between the Lines are entirely yours.

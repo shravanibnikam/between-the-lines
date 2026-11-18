@@ -1,6 +1,6 @@
-// Typewriter key sounds, synthesised with Web Audio (the app is offline and ships no audio files).
-// Each kind of key makes its own mechanical sound, and every physical key has a fixed voice
-// taken from its code, so the same key always sounds like itself.
+// Typewriter key sounds, played from recordings of a real mechanical typewriter (sounds/README.md).
+// Each kind of key plays its own part of the machine, and every physical key keeps its own strike
+// and pitch, taken from its code, so the same key always sounds like itself.
 
 export type Stroke = 'type' | 'space' | 'return' | 'back'
 
@@ -15,35 +15,68 @@ export function strokeFor(e: KeyInfo): Stroke | null {
   return [...e.key].length === 1 ? 'type' : null
 }
 
-/** A physical key's own voice (0..1 each): its pitch, its brightness and when its carriage step lands. */
-export function voice(code: string): { pitch: number; bright: number; step: number } {
+/** A physical key's own voice (0..1 each): its pitch, which strike it makes and which release. */
+export function voice(code: string): { pitch: number; strike: number; release: number } {
   let h = 2166136261 // FNV-1a
   for (let i = 0; i < code.length; i++) h = Math.imul(h ^ code.charCodeAt(i), 16777619)
+  // murmur3's final mix: codes differ only in their last letter ("KeyA", "KeyB"), which FNV
+  // alone barely spreads into the upper bytes
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b)
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35)
+  h ^= h >>> 16
   const byte = (n: number) => ((h >>> (8 * n)) & 0xff) / 255
-  return { pitch: byte(0), bright: byte(1), step: byte(2) }
+  return { pitch: byte(0), strike: byte(1), release: byte(2) }
 }
 
 /** How hard the typebar lands: a capital shifts the whole type basket, small marks barely touch the paper. */
 export function weight(key: string): number {
-  if (key !== key.toLowerCase()) return 1.3
+  if (key !== key.toLowerCase()) return 1.25
   return ".,'`:;-".includes(key) ? 0.65 : 1
 }
 
+/** Where each sound sits in sounds/typewriter.wav: [start, length] in seconds. */
+const STRIKES: [number, number][] = [[0, 0.164], [0.194, 0.164], [0.388, 0.164], [0.582, 0.164], [0.776, 0.164],
+  [0.97, 0.164], [1.164, 0.164], [1.358, 0.164], [1.552, 0.164], [1.7459, 0.164]]
+const RELEASES: [number, number][] = [[1.9399, 0.124], [2.0939, 0.124], [2.2479, 0.124], [2.4019, 0.124],
+  [2.5559, 0.124], [2.7099, 0.124]]
+const BELL: [number, number] = [2.8639, 1]
+const RETURN: [number, number] = [3.8939, 1.33]
+
+const pick = <T,>(list: T[], x: number) => list[Math.min(list.length - 1, Math.floor(x * list.length))]
+
+/** What one key plays: its strike and its release, at its own pitch (playback rate). */
+export function keyParts(code: string) {
+  const v = voice(code)
+  return { strike: pick(STRIKES, v.strike), release: pick(RELEASES, v.release), rate: 0.94 + 0.12 * v.pitch }
+}
+
+const SPRITE = new URL('./sounds/typewriter.wav', import.meta.url).href
 let ctx: AudioContext | null = null
 let out: GainNode
-let noise: AudioBuffer
+let sounds: AudioBuffer | null = null
+let loading: Promise<void> | null = null
 let idle: ReturnType<typeof setTimeout> | undefined
+/** Keys whose strike is waiting for its release. */
+const down = new Set<string>()
+
+/** Fetch and decode the recordings once, without opening the sound device. */
+export function preloadSounds() {
+  if (sounds || loading || typeof OfflineAudioContext === 'undefined') return
+  loading = fetch(SPRITE)
+    .then((r) => r.arrayBuffer())
+    .then((b) => new OfflineAudioContext(1, 1, 44100).decodeAudioData(b))
+    .then((b) => void (sounds = b))
+    .catch(() => void (loading = null)) // try again on the next keystroke
+}
 
 function audio(): AudioContext | null {
+  preloadSounds()
+  if (!sounds || typeof AudioContext === 'undefined') return null
   if (!ctx) {
-    if (typeof AudioContext === 'undefined') return null
     ctx = new AudioContext({ latencyHint: 'interactive' })
     out = ctx.createGain()
-    out.gain.value = 0.7 // a capital peaks near 0.47, two struck at once near 0.77: no clipping
+    out.gain.value = 0.7
     out.connect(ctx.destination)
-    noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate)
-    const d = noise.getChannelData(0)
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
   }
   if (ctx.state === 'suspended') void ctx.resume()
   // let the sound device sleep while nobody types
@@ -52,76 +85,45 @@ function audio(): AudioContext | null {
   return ctx
 }
 
-/** Filtered noise: a click, a slap or a slide, depending on the band. */
-function hiss(c: AudioContext, t: number, dur: number, freq: number, q: number, gain: number, to = freq) {
-  const src = c.createBufferSource()
-  src.buffer = noise
-  const f = c.createBiquadFilter()
-  f.type = 'bandpass'
-  f.frequency.setValueAtTime(freq, t)
-  if (to !== freq) f.frequency.exponentialRampToValueAtTime(to, t + dur)
-  f.Q.value = q
+function play(c: AudioContext, [start, length]: [number, number], at: number, rate: number, gain: number) {
+  const s = c.createBufferSource()
+  s.buffer = sounds
+  s.playbackRate.value = rate
   const g = c.createGain()
-  g.gain.setValueAtTime(gain, t)
-  g.gain.exponentialRampToValueAtTime(0.001, t + dur)
-  src.connect(f).connect(g).connect(out)
-  src.start(t, Math.random() * 0.5)
-  src.stop(t + dur)
+  g.gain.value = gain
+  s.connect(g).connect(out)
+  s.start(at, start, length)
 }
 
-/** A decaying tone: the frame's thump (falling pitch) or a partial of the bell. */
-function ring(c: AudioContext, t: number, freq: number, dur: number, gain: number, type: OscillatorType = 'sine', fall = 1) {
-  const o = c.createOscillator()
-  o.type = type
-  o.frequency.setValueAtTime(freq, t)
-  if (fall !== 1) o.frequency.exponentialRampToValueAtTime(freq * fall, t + dur)
-  const g = c.createGain()
-  g.gain.setValueAtTime(gain, t)
-  g.gain.exponentialRampToValueAtTime(0.001, t + dur)
-  o.connect(g).connect(out)
-  o.start(t)
-  o.stop(t + dur)
-}
-
-/** Play the sound of one keystroke: `code` is the physical key (KeyboardEvent.code), `key` what it typed. */
+/** Play the key going down: `code` is the physical key (KeyboardEvent.code), `key` what it typed. */
 export function playStroke(stroke: Stroke, code: string, key: string) {
   const c = audio()
   if (!c) return
-  const t = c.currentTime + 0.003
-  const v = voice(code)
-  const step = (at: number) => hiss(c, at, 0.01, 5200, 3, 0.16) // the escapement lets the carriage on a space
+  const t = c.currentTime + 0.002
+  const k = keyParts(code)
   switch (stroke) {
-    case 'type': {
-      const w = weight(key)
-      hiss(c, t, 0.012, 2600 + 1400 * v.bright, 0.9, 0.9 * w) // the typebar slaps the platen
-      hiss(c, t, 0.05, 1500 + 700 * v.pitch, 7, 0.22 * w) // and its steel rings for a moment
-      ring(c, t, 125 + 55 * v.pitch, 0.07, 0.35 * w, 'triangle', 0.6) // the frame's thump
-      step(t + 0.04 + 0.025 * v.step)
+    case 'type': // the typebar strikes the platen; the carriage steps on when the key comes up
+      play(c, k.strike, t, k.rate, weight(key))
+      down.add(code)
       break
-    }
-    case 'space':
-      hiss(c, t, 0.03, 650 + 150 * v.pitch, 1.2, 0.35) // the wide bar bottoms out; no typebar
-      ring(c, t, 90, 0.06, 0.3, 'triangle', 0.7)
-      step(t + 0.035)
+    case 'space': // the wide bar has no typebar: just the escapement letting the carriage on
+      play(c, k.release, t, 0.9, 1.5)
       break
-    case 'back':
-      ring(c, t, 115, 0.09, 0.4, 'triangle', 0.6) // the carriage knocked back one space
-      hiss(c, t, 0.025, 1100, 1.5, 0.4)
-      hiss(c, t + 0.03, 0.012, 4200, 3, 0.15)
+    case 'back': // the carriage knocked back one space
+      play(c, k.release, t, 0.8, 1.3)
       break
-    case 'return': {
-      // the margin bell, then the lever: the platen ratchets down a line and the carriage runs home
-      for (const [mult, gain, dur] of [[1, 0.2, 1.2], [2.76, 0.07, 0.5], [5.4, 0.035, 0.25]]) ring(c, t, 1760 * mult, dur, gain)
-      const lever = t + 0.14
-      hiss(c, lever, 0.02, 2400, 2, 0.5)
-      hiss(c, lever + 0.045, 0.02, 2100, 2, 0.4)
-      const run = lever + 0.09
-      const home = run + 0.3
-      hiss(c, run, 0.3, 1400, 1.5, 0.14, 3200) // the carriage sliding
-      for (let i = 0; i < 10; i++) hiss(c, run + 0.3 * Math.sqrt(i / 10), 0.008, 3800, 4, 0.1) // its pawl clicking past the teeth
-      ring(c, home, 105, 0.12, 0.5, 'triangle', 0.6) // and hitting the stop
-      hiss(c, home, 0.04, 900, 1, 0.45)
+    case 'return': // the margin bell, then the lever runs the carriage home
+      play(c, BELL, t, 1, 0.8)
+      play(c, RETURN, t + 0.1, 1, 1)
       break
-    }
   }
+}
+
+/** Play the key coming back up, for a key whose strike played. */
+export function playRelease(code: string) {
+  if (!down.delete(code)) return
+  const c = audio()
+  if (!c) return
+  const k = keyParts(code)
+  play(c, k.release, c.currentTime + 0.002, k.rate, 0.8)
 }

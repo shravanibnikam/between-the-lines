@@ -219,11 +219,12 @@ into Lines" (Software: Practice and Experience, 1981) and the parameters in *The
 - Focus + Typewriter shows a paper page with a warm radial lamp light (Lamp and Warmth sliders),
   a ruled type guide and an optional monospaced "typewriter type" (Source Code Pro).
 - With Typewriter on, keys make typewriter sounds ("Sound" in the toolbar, "Key sounds" in the
-  type head's menu). They are synthesised with Web Audio, with no audio files. A letter, digit or
-  mark is a typebar strike: capitals land harder, small marks lighter, and each physical key keeps
-  its own pitch. Space is the bar and the carriage step, Backspace and Delete knock the carriage
-  back, and Enter rings the margin bell and returns the carriage. Arrows, Tab and shortcuts are
-  silent.
+  type head's menu). They are cut from recordings of a 1940 Erika 5 mechanical typewriter and its
+  bell (credits in `studio/src/screens/write/sounds`). A letter, digit or mark is a typebar strike
+  going down and the carriage step coming up: capitals land harder, small marks lighter, and each
+  physical key keeps its own strike and pitch. Space is the bar and the carriage step, Backspace and
+  Delete knock the carriage back, and Enter rings the margin bell and returns the carriage. Arrows,
+  Tab and shortcuts are silent.
 
 ## Not in this version
 
