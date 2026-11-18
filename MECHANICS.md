@@ -13,6 +13,52 @@ This file records the typesetting numbers the app uses and where they live in th
 - Chapter titles default to 2.0 x the body size (designs may change it).
 - `##` subheadings are 1.5 x and `###` 1.2 x the body size (`layout.rs`, `subheading`).
 
+## Images
+
+`layout/paragraph.rs` (`image`), constants in `layout/mod.rs`, files in `image.rs`:
+
+- A line `![caption](name.png)` sets a PNG or JPEG from the book's `images/` folder. Names are
+  letters, digits, `-`, `_` and `.` only, ending in .png, .jpg or .jpeg; anything else is refused.
+- The image is scaled to the text width, or to the text block's height less its caption if that
+  is smaller, and centred. Half a line of space above it (none at a page top), half a line below,
+  then the text snaps back to the baseline grid.
+- Captions are 0.85 x the body size (`CAPTION_SCALE`), italic, centred, 0.35 lines below the image.
+- An image that doesn't fit in the rest of the page starts the next one; the gap stays empty.
+- Under 200 pixels per inch at its printed size (`MIN_IMAGE_DPI`) gives a warning; 300 is best.
+- Added images may be up to 40 MB and 50 megapixels. PDFs carry decoded pixels (Flate, alpha as
+  a soft mask); EPUBs carry the original file, and the cover gets its own first page.
+
+## Tables
+
+`layout/table.rs`, written as `|` lines (a `|---|:--:|---:|` row under the first makes it a
+header and sets left, centre or right alignment per column):
+
+- Body font at 0.9 x the body size and leading (`TABLE_SCALE`); the header row is bold.
+- Columns take their natural one-line widths when they fit the text width. Otherwise every column
+  keeps its longest word and gives up the same share of the rest; cells wrap ragged.
+- Booktabs rules, no vertical rules: top and bottom 0.08 em, under the header 0.05 em, each with
+  0.3 x the table leading above and below. The table is centred in the text block, half a body
+  line below the text before it.
+- Rows never split. A table that runs onto a new page closes with its bottom rule and starts
+  again with its header row. Text after the table snaps back to the baseline grid.
+
+## Footnotes
+
+`layout/notes.rs`, written `[^label]` with a `[^label]: text` line anywhere in the section:
+
+- Numbered 1, 2, 3… in order of first reference, starting again in each section. A reference
+  without a definition prints as typed, and a definition never referenced is left out; both add
+  a warning to the pre-flight checks.
+- The reference is a number 0.65 x the size of its text (`NOTE_REF_SCALE`), raised 0.6 x its own
+  size (`NOTE_REF_RISE`).
+- Notes sit at the foot of the page where they are first referenced, in the body font at 0.8 x
+  the body size and leading (`NOTE_SCALE`), each starting with its raised number. A rule 0.3 x the
+  text width sits in a body line of space above them.
+- Space is reserved as lines are set: the text bottom rises by the notes owed to the page, and a
+  line whose notes no longer fit moves to the next page with them. A note longer than the room
+  left continues at the foot of the next page.
+- Word counts include the note definitions as written.
+
 ## Running heads and page numbers
 
 Constants at the top of `layout.rs`:
@@ -136,6 +182,24 @@ into Lines" (Software: Practice and Experience, 1981) and the parameters in *The
 - Lines may also break after an existing hyphen or dash. Ragged-right text is filled line by line
   without hyphenation.
 - At least two lines of a paragraph stay together at the foot and head of a page.
+
+## PDF/X-1a print export
+
+`pdf.rs`, with "PDF/X-1a" on in Export. The print and print-with-bleed PDFs then follow ISO 15930-1
+(PDF/X-1a:2001), which printers such as IngramSpark prefer; large print is unaffected.
+
+- PDF 1.3 header, no `/Lang`, no transparency, every font embedded. The Info dictionary has the
+  title, creation and modification dates, `/Trapped /False` and the PDF/X version and conformance.
+- The catalog names an output intent, CGATS TR 001 (SWOP), from the ICC registry. A registered
+  characterization needs no embedded profile.
+- No RGB: neutral colours (channels within 3 of 255) are DeviceGray, the rest DeviceCMYK by the naive
+  `k = 1 - max(r, g, b)` conversion with no ink limit, so saturated colours print duller than on
+  screen. Preflight notes any title, number, ornament or drop-cap colour that will go to CMYK.
+- Neutrals with luminance 0.15 or less (Rec. 601) are written as solid black (`0 g`). The body ink
+  is #1a1a1a, which as a 90% grey would be halftoned on press and print fuzzy; small text must come
+  from one plate. Mid and light greys stay as grey tints.
+- Boxes: `/TrimBox` is the trim size; `/BleedBox` equals `/MediaBox`, which adds the bleed (0.125 in)
+  on the top, bottom and outside edges only.
 
 ## Spell checking
 

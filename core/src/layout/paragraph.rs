@@ -1,4 +1,4 @@
-//! Paragraphs, scene breaks, subheadings and the flow of a section body.
+//! Paragraphs, scene breaks, subheadings, images and the flow of a section body.
 
 use super::*;
 
@@ -51,7 +51,7 @@ impl<'a> Typesetter<'a> {
                 let mut nw = Word { runs: Vec::new(), width: 0.0 };
                 nw.push(&rest, first_run.face, first_run.size, first_run.color, first_run.slant);
                 for r in words[0].runs.iter().skip(1) {
-                    nw.push(&r.text, r.face, r.size, r.color, r.slant);
+                    nw.push_like(&r.text, r);
                 }
                 // no cap when it is the paragraph's only word, or wider than half the column
                 let only_word = nw.runs.is_empty() && words.len() == 1;
@@ -123,11 +123,14 @@ impl<'a> Typesetter<'a> {
         for (i, line) in lines.iter().enumerate() {
             let remaining_after = n - i - 1;
             let in_zone = i < zone_lines;
+            let refs = Self::line_refs(line);
             let need_new = !fits(self, 1)
                 // orphan: don't leave a single first line at the bottom
                 || (i == 0 && n >= 2 && !fits(self, 2))
                 // widow: carry two lines over instead of one (not from beside a cap)
-                || (remaining_after == 1 && i >= 1 && !fits(self, 2) && n >= 4 && !in_zone);
+                || (remaining_after == 1 && i >= 1 && !fits(self, 2) && n >= 4 && !in_zone)
+                // a line goes with its footnotes
+                || (self.y > self.top + 0.5 && !self.room_for(self.leading, &refs));
             if need_new {
                 self.continue_page();
                 zone_dead |= dc_pending.is_none();
@@ -144,6 +147,7 @@ impl<'a> Typesetter<'a> {
             } else {
                 self.place_line(line, x0, tw, bl, justify, align, space);
             }
+            self.queue_notes(&refs);
             self.y += self.leading;
         }
         self.wrap_left = if zone_dead { 0 } else { zone_lines.saturating_sub(n) };
@@ -217,9 +221,63 @@ impl<'a> Typesetter<'a> {
         self.snap_to_grid();
     }
 
-    /// Set a section's running text (paragraphs, quotes, breaks, subheadings).
+    /// An image as wide as the text block (or as tall as the page allows, less its caption),
+    /// centred, with its caption below in smaller italic. Size comes from the file header; a
+    /// missing or unreadable file is left out with a warning.
+    pub(super) fn image(&mut self, src: &str, caption: &[Span]) {
+        self.y += self.leading * self.wrap_left as f32;
+        self.wrap_left = 0;
+        let (pw, ph) = match crate::image::dims(&self.book.id, src) {
+            Ok(d) => d,
+            Err(e) => return self.warn(format!("The image “{src}” was left out: {e}")),
+        };
+        let tw = self.text_width();
+        let size = self.base * CAPTION_SCALE;
+        let (face, slant) = self.body.pick(false, true);
+        let lines = self.wrap_plain(&markup::plain(caption), face, size, tw, 0.0);
+        let cap_h = if lines.is_empty() { 0.0 } else { self.leading * 0.35 + lines.len() as f32 * size * 1.25 };
+        // the page's text bottom leaves room for the footnotes it owes
+        let fit = |s: &Self| {
+            let room = (s.text_bottom() - s.top - cap_h).max(s.leading);
+            let k = (tw / pw as f32).min(room / ph as f32);
+            (pw as f32 * k, ph as f32 * k)
+        };
+        let (mut w, mut h) = fit(self);
+        let gap = if self.y > self.top + 0.1 { self.leading * 0.5 } else { 0.0 };
+        // ponytail: no floats; an image that doesn't fit leaves the rest of the page empty and
+        // starts the next. Let later paragraphs fill the gap if writers ask for it.
+        if self.y + gap + h + cap_h > self.text_bottom() + 0.5 {
+            self.continue_page();
+            // sized again for the new page: the notes this one owed no longer shrink it
+            (w, h) = fit(self);
+        } else {
+            self.y += gap;
+        }
+        let (x, y) = (self.left() + (tw - w) / 2.0, self.y);
+        self.page().items.push(Item::Image { src: src.to_string(), x, y, w, h });
+        self.y += h;
+        if !lines.is_empty() {
+            self.y += self.leading * 0.35;
+        }
+        for l in lines {
+            let bl = self.y + size;
+            self.aligned(&l, face, size, bl, HAlign::Center, INK, 0.0, slant);
+            self.y += size * 1.25;
+        }
+        self.y += self.leading * 0.5;
+        self.snap_to_grid();
+        let dpi = pw as f32 / (w / PT_PER_IN);
+        if dpi < MIN_IMAGE_DPI {
+            self.warn(format!("The image “{src}” prints at {dpi:.0} dpi; print needs at least {MIN_IMAGE_DPI:.0} (300 is best)."));
+        }
+    }
+
+    /// Set a section's running text (paragraphs, quotes, breaks, subheadings, images, tables
+    /// and footnotes).
     pub(super) fn flow(&mut self, text: &str, drop_cap: bool, lead_in: FirstParagraph, centered: bool, italic: bool) {
-        let blocks = markup::parse_blocks(text, self.book.smart_quotes);
+        let parsed = markup::parse_section(text, self.book.smart_quotes);
+        self.start_notes(&parsed.notes, parsed.warnings);
+        let blocks = parsed.blocks;
         let mut first = self.st.no_indent_after_heading;
         let mut first_para = true;
         let indent = self.st.first_indent_em;
@@ -255,8 +313,19 @@ impl<'a> Typesetter<'a> {
                     first = self.st.no_indent_after_heading;
                     first_para = false;
                 }
+                Block::Image { src, caption } => {
+                    self.image(&src, &caption);
+                    first = self.st.no_indent_after_heading;
+                    first_para = false;
+                }
+                Block::Table { header, rows, align } => {
+                    self.table(&header, &rows, &align);
+                    first = self.st.no_indent_after_heading;
+                    first_para = false;
+                }
             }
         }
+        self.drain_notes();
     }
 
 }

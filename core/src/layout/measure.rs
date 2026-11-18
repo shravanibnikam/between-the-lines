@@ -82,6 +82,14 @@ impl<'a> Typesetter<'a> {
         let mut words = Vec::new();
         let mut cur = Word { runs: Vec::new(), width: 0.0 };
         for sp in spans {
+            // a footnote number: small and upright, part of the word it touches
+            if let Some(n) = sp.note {
+                cur.push(&sp.text, faces.regular, size * NOTE_REF_SCALE, color, false);
+                if let Some(r) = cur.runs.last_mut() {
+                    r.note = Some(n);
+                }
+                continue;
+            }
             let (face, slant) = faces.pick(sp.bold, sp.italic ^ force_italic);
             let mut piece = String::new();
             for c in sp.text.chars() {
@@ -117,7 +125,7 @@ impl<'a> Typesetter<'a> {
                 if !seg.is_empty() {
                     let size = if small { r.size * 0.78 } else { r.size };
                     let t = if small { seg.to_uppercase() } else { seg.clone() };
-                    out.push(&t, r.face, size, r.color, r.slant);
+                    out.push_like(&t, &Run { size, ..r.clone() });
                     seg.clear();
                 }
             };
@@ -209,7 +217,7 @@ impl<'a> Typesetter<'a> {
             for c in r.text.chars() {
                 if ci < cuts.len() && pos == cuts[ci] {
                     let last = out.last_mut().unwrap();
-                    last.push(&seg, r.face, r.size, r.color, r.slant);
+                    last.push_like(&seg, r);
                     seg.clear();
                     out.push(Word { runs: Vec::new(), width: 0.0 });
                     ci += 1;
@@ -217,7 +225,7 @@ impl<'a> Typesetter<'a> {
                 seg.push(c);
                 pos += 1;
             }
-            out.last_mut().unwrap().push(&seg, r.face, r.size, r.color, r.slant);
+            out.last_mut().unwrap().push_like(&seg, r);
         }
         out.retain(|w| !w.runs.is_empty());
         out
@@ -331,7 +339,8 @@ impl<'a> Typesetter<'a> {
         }
         for wd in &line.words {
             for r in &wd.runs {
-                self.text_item(x + r.dx, baseline, r.size, r.face, &r.text, r.color, 0.0, r.slant);
+                let rise = if r.note.is_some() { r.size * NOTE_REF_RISE } else { 0.0 };
+                self.text_item(x + r.dx, baseline - rise, r.size, r.face, &r.text, r.color, 0.0, r.slant);
             }
             x += wd.width + gap;
         }

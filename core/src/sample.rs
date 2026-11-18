@@ -23,17 +23,23 @@ pub fn sample_book() -> Book {
     let mut c1 = Section::new(SectionKind::Chapter, "The River That Climbed");
     c1.pov = "Iske".into();
     c1.text = "On the morning the Tamsel turned around, Iske Varrow was selling her last good compass for the price of a week's bread.\n\
-The fishwives saw it first. A cry went up along the quay at Lowmere, then another, and then the whole market was crowding the river wall to watch the water slow, and stop, and begin, with the patience of something that had made up its mind, to climb.\n\
+The fishwives saw it first. A cry went up along the quay at Lowmere, then another, and then the whole market was crowding the river wall to watch the water slow, and stop, and begin, with the patience of something that had made up its mind, to climb.[^lowmere]\n\
 It went up the weir steps like a congregation. It went up the tanners' lane and the long hill past the bell tower, carrying leaves and gulls and one astonished rowing boat, and it did not spill a drop.\n\
 \"Rivers don't do that,\" said the man holding her compass.\n\
 \"No,\" Iske agreed. She took the compass back out of his hand, because she had a feeling she was going to need it. \"They don't.\"\n\
 ***\n\
 By noon there were soldiers on the bridges, and by evening there were notices nailed to every door in the lower town. They were short, and the ink was still wet. *By order of the Ninefold Gate: all charts, maps and surveys of the Saltmarch are to be surrendered for burning.*\n\
-Iske read it twice by lamplight. Then she went home, lifted the loose board under her bed, and unrolled the one map she had sworn never to look at again.".into();
+Iske read it twice by lamplight. Then she went home, lifted the loose board under her bed, and unrolled the one map she had sworn never to look at again.\n\
+[^lowmere]: *Lowmere* is the old marsh tongue for \"the low lake.\" There has been no lake there for three hundred years.".into();
     let mut c2 = Section::new(SectionKind::Chapter, "A Ledger of Names");
     c2.pov = "Iske".into();
     c2.text = "Ten years ago she had drawn every river in the Saltmarch, and the empire had paid her in silver and then in disgrace, because the map was too honest about where the border ran.\n\
-She had drawn it carefully. She remembered every line.\n\
+She had drawn it carefully. She remembered every line, and the ledger in the case still held the figures:\n\
+| River | Charted | Leagues |\n\
+|---|:-:|--:|\n\
+| Tamsel | spring | 42 |\n\
+| Orrin | summer | 17 |\n\
+| Lesser Vey | autumn | 9 |\n\
 She did not remember the mountain.\n\
 It sat at the very top of the sheet where there should have been nothing but salt flats and the blank, polite space a cartographer leaves for what she has not seen. A dark peak, inked in a hand very like her own, and around it, like the spokes of a wheel, every river she had ever charted, all of them bending toward it.\n\
 Beneath it, in letters so small she needed her glass to read them, someone had written: *Not yet. Not until the water remembers.*\n\

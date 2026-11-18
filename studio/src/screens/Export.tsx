@@ -73,10 +73,16 @@ export function Export() {
       name: 'Print PDF',
       about: `For a printer or print-on-demand service: ${dim(p.trim_w_in)} × ${dim(p.trim_h_in)} in, ${pages ?? '…'} pages, fonts embedded.`,
       extra: (
-        <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
-          <Switch size="sm" checked={bleed} onCheckedChange={setBleed} aria-label="Include bleed" />
-          Include bleed
-        </label>
+        <div className="flex flex-col gap-1.5 text-[13px] text-muted-foreground">
+          <label className="flex items-center gap-2">
+            <Switch size="sm" checked={bleed} onCheckedChange={setBleed} aria-label="Include bleed" />
+            Include bleed
+          </label>
+          <label className="flex items-center gap-2">
+            <Switch size="sm" checked={p.pdfx} onCheckedChange={(v) => updateBook((d) => { d.print.pdfx = v })} aria-label="PDF/X-1a" />
+            PDF/X-1a <span className="text-[12px]">For printers such as IngramSpark.</span>
+          </label>
+        </div>
       ),
     },
     { key: 'large_print', name: 'Large-print PDF', about: 'The same book in larger type with ragged-right lines, for easier reading.' },

@@ -3,7 +3,8 @@
 
 use crate::layout::{self, Doc, Opts};
 use crate::model::*;
-use crate::{epub, fonts, import, markup, ornaments, preflight, sample, spell, storage, svg, themes};
+use crate::{epub, fonts, image, import, markup, ornaments, preflight, sample, spell, storage, svg, themes};
+use std::io::Read as _;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -82,10 +83,11 @@ fn mode_name(m: &str) -> Res<&'static str> {
 }
 
 /// Hash of everything that changes the typeset result: fields layout.rs never reads
-/// (notes, world, goals, stats, spelling, ebook settings, ids, times) are left out.
+/// (notes, world, goals, stats, spelling, ebook settings and cover, section ids, times) are left
+/// out. The book id stays in: it says whose images the pages show.
 fn content_key(book: &Book, mode: &str, scale: f32) -> u64 {
     let mut b = book.clone();
-    b.id.clear();
+    b.meta.cover.clear();
     b.world.clear();
     b.goals = Goals::default();
     b.stats = WritingStats::default();
@@ -143,6 +145,8 @@ fn record_stats(b: &mut Book) {
     b.stats.record(words);
 }
 
+/// The editor's view of a section. An image comes back as a paragraph holding its own line
+/// (`![caption](name.png)`), so the editor shows and saves it as text.
 fn blocks_dto(text: &str) -> Value {
     #[derive(Serialize)]
     struct S {
@@ -166,6 +170,12 @@ fn blocks_dto(text: &str) -> Value {
             markup::Block::Quote(s) => B::Quote { spans: spans(s) },
             markup::Block::Heading(level, s) => B::Heading { level, spans: spans(s) },
             markup::Block::SceneBreak => B::SceneBreak,
+            markup::Block::Image { src, caption } => {
+                let plain = |t: String| S { text: t, bold: false, italic: false };
+                B::Para { spans: std::iter::once(plain("![".into())).chain(spans(caption)).chain([plain(format!("]({src})"))]).collect() }
+            }
+            // parse_blocks keeps table lines as paragraphs, so this never happens
+            markup::Block::Table { .. } => B::Para { spans: Vec::new() },
         })
         .collect();
     serde_json::to_value(v).unwrap_or(Value::Null)
@@ -229,6 +239,16 @@ fn summary(b: &Book) -> Value {
         "modified": b.modified, "today_words": b.stats.today_written(), "daily_goal": b.goals.daily_words,
         "streak": b.stats.streak(b.goals.daily_words), "trim_w_in": b.print.trim_w_in, "trim_h_in": b.print.trim_h_in,
     })
+}
+
+/// A new image's file name: the picked file's name in lower-case letters, digits and hyphens,
+/// a unique suffix, and the extension of what the file really is.
+fn image_name(path: &Path, kind: image::Kind) -> String {
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase();
+    let stem: Vec<&str> = stem.split(|c: char| !c.is_ascii_alphanumeric()).filter(|p| !p.is_empty()).collect();
+    let stem: String = stem.join("-").chars().take(40).collect();
+    let stem = if stem.is_empty() { "image" } else { stem.trim_end_matches('-') };
+    format!("{stem}-{}.{}", new_id(), kind.ext())
 }
 
 fn secs(t: std::io::Result<std::time::SystemTime>) -> u64 {
@@ -435,11 +455,11 @@ impl Api {
                         let (_, d) = self.doc_for(&b, "print", 1.0);
                         let bleed = kind == "print_bleed";
                         let n = if bleed { "print with bleed" } else { "print" };
-                        (format!("{base} - {n}.pdf"), crate::pdf::write(&d, &b.meta.title, &b.meta.author, bleed), Some(d.pages.len()))
+                        (format!("{base} - {n}.pdf"), crate::pdf::write(&d, &b.meta.title, &b.meta.author, bleed, b.print.pdfx), Some(d.pages.len()))
                     }
                     "large_print" => {
                         let (_, d) = self.doc_for(&b, "large", 1.0);
-                        (format!("{base} - large print.pdf"), crate::pdf::write(&d, &b.meta.title, &b.meta.author, false), Some(d.pages.len()))
+                        (format!("{base} - large print.pdf"), crate::pdf::write(&d, &b.meta.title, &b.meta.author, false, false), Some(d.pages.len()))
                     }
                     "epub_kindle" | "epub_apple" | "epub_generic" => {
                         let target = match kind.as_str() {
@@ -488,6 +508,29 @@ impl Api {
                 }
                 std::fs::copy(&src, dest).map_err(|e| format!("Couldn't save the copy: {e}"))?;
                 Ok(Value::Null)
+            }
+            "image_add" => {
+                let (id, path): (String, String) = (arg(a, "book")?, arg(a, "path")?);
+                existing(&id)?;
+                let path = Path::new(&path);
+                let mut bytes = Vec::new();
+                std::fs::File::open(path)
+                    .and_then(|f| f.take(image::MAX_BYTES + 1).read_to_end(&mut bytes))
+                    .map_err(|e| format!("Couldn't read that image: {e}"))?;
+                if bytes.len() as u64 > image::MAX_BYTES {
+                    return Err("That image is over 40 MB.".into());
+                }
+                let kind = image::Kind::sniff(&bytes).ok_or("Only PNG and JPEG images can be added.")?;
+                let r = image::decode(&bytes)?;
+                let name = image_name(path, kind);
+                storage::add_image(&id, &name, &bytes)?;
+                Ok(json!({ "name": name, "w": r.w, "h": r.h }))
+            }
+            "image_data" => {
+                let (id, name): (String, String) = (arg(a, "book")?, arg(a, "name")?);
+                existing(&id)?;
+                let (kind, bytes) = image::read(&id, &name)?;
+                out(image::data_uri(kind, &bytes))
             }
             "markup_blocks" => Ok(blocks_dto(&arg::<String>(a, "text")?)),
             "spell_misspelled" => {

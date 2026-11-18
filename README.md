@@ -36,7 +36,7 @@ and open source, and it does the core job well.
 | **Free, for good** | MIT licensed. Every design and every export format is included, with no licence keys. |
 | **Private by design** | No account, no cloud, no AI and no telemetry. The app makes no network requests, so your manuscript never leaves your machine. |
 | **Real typesetting** | Whole-paragraph line breaking (Knuth–Plass, the method behind TeX), hyphenation, drop caps, running heads and proper page furniture. |
-| **Ready for print and stores** | Print PDF with optional bleed, a large-print edition, and EPUBs for Kindle, Apple Books and other stores. Every EPUB passes [EPUBCheck](https://www.w3.org/publishing/epubcheck/) in CI. |
+| **Ready for print and stores** | Print PDF with optional bleed (and PDF/X-1a for printers such as IngramSpark), a large-print edition, and EPUBs for Kindle, Apple Books and other stores. Every EPUB passes [EPUBCheck](https://www.w3.org/publishing/epubcheck/) in CI. |
 
 ## Features
 
@@ -117,7 +117,12 @@ every chapter they appear in, and the spell checker always accepts them.
 
 ### And also
 
-- **Import** from Word (`.docx`), OpenDocument (`.odt`), Markdown and plain text.
+- **Import** from Word (`.docx`), OpenDocument (`.odt`), Markdown and plain text. Footnotes and
+  endnotes come across as footnotes.
+- **Images and an ebook cover:** insert PNG or JPEG pictures with captions from the editor toolbar
+  (maps, diagrams, illustrations), and pick a cover in Book details for the EPUBs.
+- **Tables and footnotes:** tables print with clean horizontal rules and repeat their header on a
+  new page; footnotes sit at the foot of the page that mentions them, and pop up in ebooks.
 - **Front and back matter:** title page, copyright, dedication, epigraph, contents, foreword, prologue, parts, epilogue, acknowledgements, about the author, also by, and custom sections.
 - **Snapshots** of the whole book, which you can restore at any time.
 - **Command palette** on <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>K</kbd>.
@@ -126,6 +131,21 @@ every chapter they appear in, and the spell checker always accepts them.
 <p align="center">
   <img src="docs/screenshots/write.png" width="820" alt="The Write screen in light mode">
 </p>
+
+### Writing format
+
+Chapters are plain text, one paragraph per line. The editor handles bold and italic for you; the
+rest is a few Markdown-style lines:
+
+| Type this | To get |
+|---|---|
+| `*italic*`, `**bold**` | italic, bold |
+| `## Heading`, `### Smaller heading` | subheadings |
+| `> A quoted passage` | a block quote |
+| `***` on its own line | a scene break, drawn in the design's style |
+| `![A map of the valley](map.png)` | an image with a caption (use the toolbar's Image button) |
+| `\| Name \| Age \|` then `\|---\|--:\|` then `\| Ada \| 36 \|` | a table; the dashes row makes a header and `:` sets alignment |
+| `as Pliny wrote[^1]` and, anywhere in the chapter, `[^1]: Natural History, book 2.` | a footnote, numbered per chapter |
 
 ## Get started
 
@@ -149,7 +169,7 @@ npm install
 Books are saved in your system's app data folder:
 `~/Library/Application Support/Between the Lines` on macOS, `~/.local/share/Between the Lines` on
 Linux, and `%APPDATA%\Between the Lines` on Windows. Each book is a folder holding `book.json`,
-`exports/` and `snapshots/`, so your work is easy to back up and never locked in.
+`images/`, `exports/` and `snapshots/`, so your work is easy to back up and never locked in.
 
 ## How it works
 
@@ -167,10 +187,11 @@ in an ordinary browser.
 | [`studio/DESIGN.md`](studio/DESIGN.md) | The interface's design rules: colours, type, layout and states |
 
 **Run the tests** (unit tests plus an end-to-end run of every API command against a temporary
-library):
+library, then the interface's unit tests):
 
 ```sh
 cargo test --manifest-path core/Cargo.toml
+cd studio && npm test
 ```
 
 **Work on the interface in a browser**, with real data and no Tauri window:
@@ -183,8 +204,8 @@ cd studio && npm run dev     # then open http://localhost:1420
 ## Roadmap
 
 Ideas for future versions, with no dates promised: prebuilt downloads, series, version branches,
-cover templates with spine-width calculation, more hyphenation and spelling languages, and PDF/X
-output for printers. AI features are deliberately not on the list.
+cover templates with spine-width calculation, and more hyphenation and spelling languages. AI
+features are deliberately not on the list.
 
 Have an idea or found a bug? [Open an issue](https://github.com/shravanibnikam/between-the-lines/issues).
 

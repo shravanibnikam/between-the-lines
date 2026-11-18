@@ -36,7 +36,12 @@ export interface BookMeta {
   publisher: string; year: string; edition: string
   isbn_paperback: string; isbn_hardcover: string; isbn_ebook: string
   language: string; description: string; keywords: string
+  /** The ebook cover: a file name in the book's images folder, '' for none. */
+  cover: string
 }
+
+/** An image copied into the book (`image_add`): its file name and size in pixels. */
+export interface ImageInfo { name: string; w: number; h: number }
 
 export interface Terminology { chapter: string; part: string; prologue: string; epilogue: string; contents: string }
 
@@ -59,7 +64,7 @@ export interface StyleProfile {
 export interface PrintSettings {
   trim_key: string; trim_w_in: number; trim_h_in: number
   margin_top_in: number; margin_bottom_in: number; margin_inside_in: number; margin_outside_in: number
-  bleed: boolean; page_numbers: boolean; page_number_pos: PageNumberPos
+  bleed: boolean; pdfx: boolean; page_numbers: boolean; page_number_pos: PageNumberPos
   running_headers: boolean; header_left: HeaderContent; header_right: HeaderContent
   recto_chapter_start: boolean; paper: Paper; binding: Binding
 }

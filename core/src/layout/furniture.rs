@@ -85,7 +85,7 @@ impl<'a> Typesetter<'a> {
 
     /// A running head's words (italic or small capitals) and its width.
     pub(super) fn running_head(&self, text: &str, size: f32, track: f32) -> (Vec<Word>, f32) {
-        let spans = [Span { text: text.to_string(), bold: false, italic: !self.st.header_small_caps }];
+        let spans = [Span { text: text.to_string(), bold: false, italic: !self.st.header_small_caps, note: None }];
         let mut words = self.words_from_spans(&spans, size, self.body, INK, false);
         if self.st.header_small_caps {
             words = words.iter().map(Self::small_caps).collect();

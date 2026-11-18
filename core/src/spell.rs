@@ -58,7 +58,23 @@ pub fn words(text: &str) -> Vec<(usize, usize)> {
     if let Some(s) = start {
         out.push((s, text.len()));
     }
+    let names = image_names(text);
+    out.retain(|(s, _)| !names.iter().any(|r| r.contains(s)));
     out
+}
+
+/// Byte ranges of the file names on image lines (`](name.png)`), which aren't prose.
+fn image_names(text: &str) -> Vec<std::ops::Range<usize>> {
+    let mut v = Vec::new();
+    let mut at = 0;
+    for line in text.split_inclusive('\n') {
+        let t = line.trim_end();
+        if let (Some(_), Some(i)) = (crate::markup::image_line(t.trim_start()), t.rfind("](")) {
+            v.push(at + i..at + t.len());
+        }
+        at += line.len();
+    }
+    v
 }
 
 /// Whether a word should be flagged. `extra` holds names the book accepts (its own
@@ -170,6 +186,8 @@ mod tests {
         assert!(!misspelled("2nd", &[]));
         assert!(!misspelled("4th", &[]));
         assert_eq!(words("the 2nd time"), vec![(0, 3), (4, 7), (8, 12)]);
+        // an image's caption is checked, its file name isn't
+        assert_eq!(words("A\n![Sea view](img-3f2a.png)\nB"), vec![(0, 1), (4, 7), (8, 12), (28, 29)]);
         assert!(misspellings("his 2nd and 1990s O’Brien", &["O’Brien".into()]).is_empty());
     }
 }

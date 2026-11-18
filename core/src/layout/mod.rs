@@ -8,9 +8,11 @@ use crate::model::*;
 
 mod furniture;
 mod measure;
+mod notes;
 mod openers;
 mod pages;
 mod paragraph;
+mod table;
 
 pub const PT_PER_IN: f32 = 72.0;
 pub const PT_PER_MM: f32 = 72.0 / 25.4;
@@ -24,6 +26,18 @@ pub const FOLIO_RISE: f32 = 0.5;
 pub const HEADER_RULE_GAP_PT: f32 = 2.0 * PT_PER_MM;
 /// Body size used by the large-print export (points).
 pub const LARGE_PRINT_SIZE: f32 = crate::themes::LARGE_PRINT_BODY_PT;
+/// Image captions are this many times the body size.
+pub const CAPTION_SCALE: f32 = 0.85;
+/// Images printing at fewer pixels per inch than this get a warning.
+pub const MIN_IMAGE_DPI: f32 = 200.0;
+/// Tables are set at this many times the body size and leading.
+pub const TABLE_SCALE: f32 = 0.9;
+/// Footnotes are set at this many times the body size and leading.
+pub const NOTE_SCALE: f32 = 0.8;
+/// Footnote numbers are this many times the size of the text they sit in...
+pub const NOTE_REF_SCALE: f32 = 0.65;
+/// ...raised by this many times their own size.
+pub const NOTE_REF_RISE: f32 = 0.6;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type")]
@@ -31,6 +45,8 @@ pub enum Item {
     Text { x: f32, y: f32, size: f32, face: usize, text: String, color: [u8; 3], spacing: f32, slant: bool },
     Line { x1: f32, y1: f32, x2: f32, y2: f32, width: f32, color: [u8; 3] },
     Ornament { key: String, x: f32, y: f32, w: f32, h: f32, color: [u8; 3] },
+    /// A file in the book's `images/` folder (`Doc::book_id`), top-left at x, y.
+    Image { src: String, x: f32, y: f32, w: f32, h: f32 },
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -65,6 +81,9 @@ pub struct Doc {
     /// The book's language (as in its details), for the PDF.
     #[serde(default)]
     pub lang: String,
+    /// The book the pages came from, whose images folder the image items name.
+    #[serde(default)]
+    pub book_id: String,
 }
 
 impl Doc {
@@ -115,6 +134,8 @@ struct Run {
     color: [u8; 3],
     slant: bool,
     dx: f32,
+    /// The footnote this (raised) number calls.
+    note: Option<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -129,11 +150,20 @@ impl Word {
             return;
         }
         let w = metrics()[face].width(text, size);
-        self.runs.push(Run { text: text.to_string(), face, size, color, slant, dx: self.width });
+        self.runs.push(Run { text: text.to_string(), face, size, color, slant, dx: self.width, note: None });
         self.width += w;
+    }
+
+    /// Push text in the style of `r` (keeping a footnote number a footnote number).
+    fn push_like(&mut self, text: &str, r: &Run) {
+        self.push(text, r.face, r.size, r.color, r.slant);
+        if let Some(last) = self.runs.last_mut().filter(|_| !text.is_empty()) {
+            last.note = r.note;
+        }
     }
 }
 
+#[derive(Clone)]
 struct Line {
     words: Vec<Word>,
     width: f32,
@@ -197,6 +227,11 @@ struct Typesetter<'a> {
     /// Lines still to set beside a drop cap (it can be taller than its paragraph).
     wrap_left: usize,
     wrap_w: f32,
+    /// This section's footnotes, set into lines, until their first reference is placed.
+    notes: Vec<Option<Vec<Line>>>,
+    /// Footnote lines owed to the foot of the current page.
+    foot: Vec<Line>,
+    warnings: Vec<String>,
 }
 
 impl<'a> Typesetter<'a> {
@@ -248,6 +283,15 @@ impl<'a> Typesetter<'a> {
             space_w,
             wrap_left: 0,
             wrap_w: 0.0,
+            notes: Vec::new(),
+            foot: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
+
+    fn warn(&mut self, w: String) {
+        if !self.warnings.contains(&w) {
+            self.warnings.push(w);
         }
     }
 
@@ -261,14 +305,16 @@ impl<'a> Typesetter<'a> {
             self.outside
         }
     }
+    /// Where text must end: the bottom margin, less the footnotes queued for this page.
     fn text_bottom(&self) -> f32 {
-        self.h - self.bottom
+        self.h - self.bottom - self.foot_height(self.foot.len())
     }
     fn page(&mut self) -> &mut Page {
         self.pages.last_mut().expect("a page")
     }
 
     fn new_page(&mut self, section: Option<(Area, usize)>, opener: bool, front: bool) {
+        self.flush_notes();
         let recto = self.pages.len().is_multiple_of(2);
         self.pages.push(Page { items: Vec::new(), folio: None, recto, section, blank: false, opener, front });
         self.running_title.push(String::new());
@@ -329,6 +375,7 @@ fn smarten_titles(book: &Book) -> Option<Book> {
         return None;
     }
     let mut b = Book {
+        id: book.id.clone(),
         meta: book.meta.clone(),
         front: book.front.clone(),
         body: book.body.clone(),
@@ -378,8 +425,9 @@ pub fn typeset(book: &Book, opts: Opts) -> Doc {
     let titled = smarten_titles(book);
     let book = titled.as_ref().unwrap_or(book);
     let mut doc = typeset_passes(book, opts);
-    doc.warnings = glyph_warnings(&doc.pages);
+    doc.warnings.extend(glyph_warnings(&doc.pages));
     doc.lang = book.meta.language.trim().to_string();
+    doc.book_id = book.id.clone();
     doc
 }
 
@@ -392,13 +440,13 @@ fn typeset_passes(book: &Book, opts: Opts) -> Doc {
     first.furniture();
     let has_contents = book.front.iter().any(|s| s.kind == SectionKind::Contents);
     if !has_contents {
-        return Doc { w: first.w, h: first.h, toc: first.toc, starts: first.starts, pages: first.pages, ..Default::default() };
+        return Doc { w: first.w, h: first.h, toc: first.toc, starts: first.starts, pages: first.pages, warnings: first.warnings, ..Default::default() };
     }
     let mut second = Typesetter::new(book, opts);
     second.known_toc = first.toc.clone();
     second.run();
     second.furniture();
-    Doc { w: second.w, h: second.h, toc: second.toc, starts: second.starts, pages: second.pages, ..Default::default() }
+    Doc { w: second.w, h: second.h, toc: second.toc, starts: second.starts, pages: second.pages, warnings: second.warnings, ..Default::default() }
 }
 
 #[cfg(test)]
@@ -433,6 +481,12 @@ mod tests {
                     let w = width_of(*face, text, *size, *spacing);
                     assert!(*x >= l - 0.05 && x + w <= r + 0.05, "{what}: page {pi} {text:?} x {x} w {w} block {l}..{r}");
                     assert!(*y >= 0.0 && *y <= d.h, "{what}: page {pi} {text:?} y {y}");
+                }
+                if let Item::Line { x1, x2, .. } = it {
+                    assert!(*x1 >= l - 0.05 && *x2 <= r + 0.05, "{what}: page {pi} rule {x1}..{x2} block {l}..{r}");
+                }
+                if let Item::Image { src, x, w, .. } = it {
+                    assert!(*x >= l - 0.05 && x + w <= r + 0.05, "{what}: page {pi} image {src} {x}..{} block {l}..{r}", x + w);
                 }
             }
         }
@@ -735,6 +789,240 @@ mod tests {
         assert_eq!(d.warnings.len(), 1, "{:?}", d.warnings);
         assert!(d.warnings[0].starts_with("1 character can't be printed") && d.warnings[0].contains('\u{2a6d6}'));
         assert_eq!(d.lang, "en");
+    }
+
+    /// A one-chapter book whose images folder holds `pic.png` (600 x 400) and `tall.png` (300 x 1200).
+    fn image_book(text: &str) -> Book {
+        crate::storage::tests::setup();
+        let mut b = one_chapter(text);
+        b.id = "layout-images".into();
+        let dir = crate::storage::images_dir(&b.id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("pic.png"), crate::image::test_png(600, 400, false)).unwrap();
+        std::fs::write(dir.join("tall.png"), crate::image::test_png(300, 1200, true)).unwrap();
+        b
+    }
+
+    fn images(d: &Doc) -> Vec<(usize, String, f32, f32, f32, f32)> {
+        let mut v = Vec::new();
+        for (i, p) in d.pages.iter().enumerate() {
+            for it in &p.items {
+                if let Item::Image { src, x, y, w, h } = it {
+                    v.push((i, src.clone(), *x, *y, *w, *h));
+                }
+            }
+        }
+        v
+    }
+
+    #[test]
+    fn images_stay_inside_the_text_block_with_their_caption() {
+        let b = image_book("Before the picture.\n![A *quiet* harbour](pic.png)\nAfter the picture.");
+        let d = assert_inside(&b, Opts::default(), "image");
+        let t = Typesetter::new(&b, Opts::default());
+        let imgs = images(&d);
+        assert_eq!(imgs.len(), 1, "{:?}", d.warnings);
+        let (pi, _, x, y, w, h) = imgs[0].clone();
+        let (l, r, top, bottom) = block(&b, Opts::default(), d.pages[pi].recto);
+        assert!(x >= l - 0.01 && x + w <= r + 0.01 && y >= top && y + h <= bottom + 0.5, "{x} {y} {w} {h}");
+        assert!(((x - l) - (r - x - w)).abs() < 0.01 && (w / h - 1.5).abs() < 0.01, "centred, in proportion");
+        let tx = texts(&d.pages[pi]);
+        let cap = tx.iter().find(|t| t.3.contains("harbour")).expect("caption");
+        assert!(cap.1 > y + h && (cap.2 - t.base * CAPTION_SCALE).abs() < 0.01);
+        let after = tx.iter().find(|t| t.3 == "After").unwrap();
+        assert!(after.1 > cap.1);
+        let lines = (after.1 - t.baseline(t.top)) / t.leading;
+        assert!((lines - lines.round()).abs() < 0.01, "back on the baseline grid: {lines}");
+        // 600 px across a text block of about 4 in is under 200 dpi
+        assert!(d.warnings.iter().any(|w| w.contains("pic.png") && w.contains("dpi")), "{:?}", d.warnings);
+    }
+
+    #[test]
+    fn a_tall_image_moves_to_the_next_page() {
+        let paras: Vec<String> = (0..12).map(|i| format!("Paragraph {i} before the tall picture.")).collect();
+        let b = image_book(&format!("{}\n![](tall.png)\nAfter.", paras.join("\n")));
+        let d = assert_inside(&b, Opts::default(), "tall image");
+        let t = Typesetter::new(&b, Opts::default());
+        let (pi, _, _, y, _, h) = images(&d)[0].clone();
+        assert!((y - t.top).abs() < 0.01 && y + h <= t.text_bottom() + 0.5, "{y} {h}");
+        assert!(texts(&d.pages[pi - 1]).iter().any(|x| x.3.contains("11")), "the page before keeps the text");
+        assert!(!texts(&d.pages[pi]).iter().any(|x| x.3.contains("Paragraph")), "nothing moved up beside it");
+    }
+
+    #[test]
+    fn missing_and_invalid_images_warn() {
+        let b = image_book("![](nope.png)\n![](../book.json)\n![](pic.png)\nText.");
+        let d = typeset(&b, Opts::default());
+        assert_eq!(images(&d).len(), 1);
+        assert!(d.warnings.iter().any(|w| w.contains("nope.png") && w.contains("wasn't found")), "{:?}", d.warnings);
+        assert!(d.warnings.iter().any(|w| w.contains("../book.json") && w.contains("isn't valid")), "{:?}", d.warnings);
+        assert_eq!(d.book_id, "layout-images");
+    }
+
+    #[test]
+    fn images_tables_and_footnotes_share_pages_without_overlapping() {
+        let mut shared = 0;
+        for img in ["pic.png", "tall.png"] {
+            for long in [1, 40] {
+                for k in 0..16 {
+                    let fill: Vec<String> = (0..k).map(|i| format!("Paragraph {i} is filler, long enough to wrap onto a second line of the page.")).collect();
+                    let text = format!(
+                        "{}\nThis paragraph calls a note near the foot of the page.[^a] More words follow it.\n![A view](IMG)\n| Name | Count |\n|---|--:|\n| one | 1 |\n| two[^b] | 2 |\nAfter the table.\n[^a]: {}\n[^b]: A note from the table.",
+                        fill.join("\n"),
+                        "Note words here. ".repeat(long)
+                    )
+                    .replace("IMG", img);
+                    let b = image_book(&text);
+                    let what = format!("{img} long {long} k {k}");
+                    assert_inside(&b, Opts::default(), &what);
+                    // the text block before furniture is added: every item of the chapter sits in it
+                    let mut t = Typesetter::new(&b, Opts::default());
+                    t.run();
+                    let (top, bottom, base) = (t.top, t.h - t.bottom, t.base);
+                    let is = |s: f32, k: f32| (s - base * k).abs() < 0.01;
+                    for (pi, p) in t.pages.iter().enumerate().filter(|(_, p)| p.section == Some((Area::Body, 0))) {
+                        let rule = p.items.iter().find_map(|it| match it {
+                            Item::Line { x1, x2, y1, width, .. } if *width == 0.4 && (x2 - x1 - t.text_width() * 0.3).abs() < 0.01 => Some(*y1),
+                            _ => None,
+                        });
+                        let foot = rule.unwrap_or(bottom);
+                        shared += usize::from(rule.is_some() && p.items.iter().any(|it| matches!(it, Item::Image { .. })));
+                        for it in &p.items {
+                            match it {
+                                Item::Image { y, h, .. } => {
+                                    assert!(*y >= top - 0.01 && y + h <= foot + 0.5, "{what}: page {pi} image {y}+{h} reaches the notes at {foot}");
+                                    // sized for the page it lands on, not the notes of the page it left
+                                    let cap_h = t.leading * 0.35 + base * CAPTION_SCALE * 1.25;
+                                    assert!(img != "tall.png" || rule.is_some() || (y + h + cap_h - bottom).abs() < 0.5, "{what}: page {pi} tall image ends at {}", y + h + cap_h);
+                                }
+                                Item::Line { y1, .. } if Some(*y1) != rule => assert!(*y1 >= top - 0.01 && *y1 <= foot + 0.5, "{what}: page {pi} table rule at {y1} below {foot}"),
+                                Item::Text { y, size, text, .. } => {
+                                    assert!(y - size * 0.8 >= top - 0.5 && y + size * 0.25 <= bottom + 0.5, "{what}: page {pi} {text:?} at {y} outside the block");
+                                    let note = rule.is_some_and(|r| *y > r) && (is(*size, NOTE_SCALE) || is(*size, NOTE_SCALE * NOTE_REF_SCALE));
+                                    assert!(note || y + size * 0.25 <= foot + 0.5, "{what}: page {pi} {text:?} at {y} overlaps the notes at {foot}");
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(shared > 0, "some page holds both an image and footnotes");
+    }
+
+    /// `n` paragraphs, every third calling its own footnote, `long` sets how long the notes run.
+    fn noted_chapter(n: usize, long: usize) -> Book {
+        let (mut text, mut defs) = (Vec::new(), Vec::new());
+        for i in 0..n {
+            if i % 3 == 1 {
+                text.push(format!("Paragraph {i} runs on for a while so that it fills a line or two, and then it calls a note.[^n{i}] A little more follows."));
+                defs.push(format!("[^n{i}]: {}", "Note words here. ".repeat(1 + (i % 5) * long)));
+            } else {
+                text.push(format!("Paragraph {i} is ordinary filler, long enough to wrap onto a second line of the page."));
+            }
+        }
+        one_chapter(&format!("{}\n{}", text.join("\n"), defs.join("\n")))
+    }
+
+    #[test]
+    fn footnotes_sit_at_the_foot_of_their_page() {
+        for (n, long) in [(12, 0), (30, 1), (45, 3), (20, 40)] {
+            for sink in [0.0, 3.0, 7.0] {
+                let mut b = noted_chapter(n, long);
+                b.style.sink_lines = sink;
+                let what = format!("n {n} long {long} sink {sink}");
+                let d = assert_inside(&b, Opts::default(), &what);
+                assert!(d.warnings.is_empty(), "{:?}", d.warnings);
+                let t = Typesetter::new(&b, Opts::default());
+                let (base, bottom, folio) = (t.base, t.h - t.bottom, t.h - t.bottom * FOLIO_RISE);
+                let is = |s: f32, k: f32| (s - base * k).abs() < 0.01;
+                let (mut refs_all, mut words) = (Vec::new(), 0);
+                for p in d.pages.iter().filter(|p| !p.front) {
+                    let tx = texts(p);
+                    // the short rule over the notes
+                    let rule = p.items.iter().find_map(|it| match it {
+                        Item::Line { x1, x2, y1, .. } if (x2 - x1 - t.text_width() * 0.3).abs() < 0.01 => Some(*y1),
+                        _ => None,
+                    });
+                    let in_foot = |y: f32| rule.is_some_and(|r| y > r) && y <= bottom + 0.5;
+                    let mut refs: Vec<String> = tx.iter().filter(|x| is(x.2, NOTE_REF_SCALE)).map(|x| x.3.clone()).collect();
+                    let mut marks: Vec<String> = tx.iter().filter(|x| is(x.2, NOTE_SCALE * NOTE_REF_SCALE)).map(|x| x.3.clone()).collect();
+                    refs.sort();
+                    marks.sort();
+                    assert_eq!(refs, marks, "{what}: every note starts on its reference's page");
+                    refs_all.extend(refs);
+                    let body_end = tx.iter().filter(|x| is(x.2, 1.0)).map(|x| x.1 + base * 0.25).fold(0.0, f32::max);
+                    let notes: Vec<_> = tx.iter().filter(|x| in_foot(x.1)).collect();
+                    words += notes.iter().filter(|x| x.3 == "Note").count();
+                    assert!(rule.is_none_or(|r| r > body_end), "{what}: rule above the text");
+                    for x in &notes {
+                        assert!(is(x.2, NOTE_SCALE) || is(x.2, NOTE_SCALE * NOTE_REF_SCALE), "{what}: {x:?} in the notes");
+                        assert!(x.1 - x.2 * 0.8 > body_end, "{what}: note {:?} at {} overlaps the text ending {body_end}", x.3, x.1);
+                        assert!(x.1 + x.2 * 0.25 < folio - base * FURNITURE_SCALE * 0.8, "{what}: note {:?} reaches the folio", x.3);
+                    }
+                }
+                let expect: Vec<String> = (1..=(n + 1) / 3).map(|k| k.to_string()).collect();
+                refs_all.sort();
+                let mut want = expect.clone();
+                want.sort();
+                assert_eq!(refs_all, want, "{what}: notes numbered once each");
+                let total: usize = (0..n).filter(|i| i % 3 == 1).map(|i| 1 + (i % 5) * long).sum();
+                assert_eq!(words, total, "{what}: no note text lost");
+            }
+        }
+    }
+
+    #[test]
+    fn footnotes_restart_each_chapter_and_warn() {
+        let mut b = book();
+        b.body.truncate(2);
+        b.body[0].text = "First[^a] and second[^b].\n[^a]: A.\n[^b]: B.".into();
+        b.body[1].text = "Again[^z] and [^nope].\n[^z]: Z.\n[^spare]: Unused.".into();
+        let d = typeset(&b, Opts::default());
+        let base = Typesetter::new(&b, Opts::default()).base;
+        let refs = |i: usize| texts(&d.pages[d.page_of(Area::Body, i).unwrap()]).into_iter().filter(|x| (x.2 - base * NOTE_REF_SCALE).abs() < 0.01).map(|x| x.3).collect::<Vec<_>>();
+        assert_eq!(refs(0), ["1", "2"]);
+        assert_eq!(refs(1), ["1"]);
+        assert_eq!(d.warnings.len(), 2, "{:?}", d.warnings);
+        assert!(d.warnings[0].contains("[^nope]") && d.warnings[1].contains("[^spare]") && d.warnings[1].contains("A Ledger of Names"), "{:?}", d.warnings);
+    }
+
+    #[test]
+    fn tables_keep_rows_whole_and_repeat_the_header() {
+        let long = "words that wrap within a narrow cell ".repeat(2);
+        let rows: Vec<String> = (0..60).map(|i| format!("| start{i} {long} end{i} | {i} | short |")).collect();
+        let text = format!("Before.\n| Header one | Two | Three |\n|---|--:|:-:|\n{}\nAfter the table.", rows.join("\n"));
+        for trim in [3.0, 5.5] {
+            let mut b = one_chapter(&text);
+            b.print.trim_w_in = trim;
+            let d = assert_inside(&b, Opts::default(), "table");
+            let t = Typesetter::new(&b, Opts::default());
+            let mut pages_with_rows = 0;
+            for (i, p) in d.pages.iter().enumerate() {
+                let tx = texts(p);
+                for r in 0..60 {
+                    let (s, e) = (tx.iter().any(|x| x.3 == format!("start{r}")), tx.iter().any(|x| x.3 == format!("end{r}")));
+                    assert_eq!(s, e, "trim {trim}: row {r} split at page {i}");
+                }
+                if tx.iter().any(|x| x.3.starts_with("start")) {
+                    pages_with_rows += 1;
+                    assert!(tx.iter().any(|x| x.3 == "Header"), "trim {trim}: page {i} has no header");
+                    assert!(p.items.iter().filter(|it| matches!(it, Item::Line { .. })).count() >= 3, "trim {trim}: page {i} rules");
+                }
+                // back on the grid after the table
+                if let Some(a) = tx.iter().find(|x| x.3 == "After") {
+                    let k = (a.1 - t.baseline(t.top)) / t.leading;
+                    assert!((k - k.round()).abs() < 0.01, "trim {trim}: off the grid by {k}");
+                }
+            }
+            assert!(pages_with_rows >= 3, "{pages_with_rows}");
+        }
+        // too many wide columns for the page still stay inside the block
+        let row = format!("| {} |", ["Supercalifragilistic"; 8].join(" | "));
+        let mut b = one_chapter(&format!("{row}\n|---|---|---|---|---|---|---|---|\n{row}"));
+        b.print.trim_w_in = 4.0;
+        assert_inside(&b, Opts::default(), "wide table");
     }
 
     #[test]

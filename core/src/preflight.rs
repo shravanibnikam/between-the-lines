@@ -81,10 +81,22 @@ pub fn preflight(book: &Book, pages: usize) -> Vec<Check> {
             push(Level::Problem, format!("The {name} margin ({val:.3} in) is under the {min_out} in printers require."));
         }
     }
+    if book.print.pdfx {
+        let st = &book.style;
+        let colours = [("title", &st.title_color), ("chapter number", &st.number_color), ("ornament", &st.ornament_color), ("drop cap", &st.drop_cap_color)];
+        let coloured: Vec<&str> = colours.iter().filter(|(_, c)| !crate::pdf::is_neutral(crate::layout::hex_rgb(c))).map(|(n, _)| *n).collect();
+        if !coloured.is_empty() {
+            push(Level::Warn, format!("PDF/X is on, so the {} colour will print in CMYK; check it on a printer's proof.", coloured.join(", ")));
+        }
+    }
     for (label, isbn) in [("Paperback", &book.meta.isbn_paperback), ("Hardcover", &book.meta.isbn_hardcover), ("Ebook", &book.meta.isbn_ebook)] {
         if !isbn.trim().is_empty() && !isbn_ok(isbn) {
             push(Level::Warn, format!("The {label} ISBN doesn't look valid (check the digits)."));
         }
+    }
+    if crate::image::kind(&book.id, &book.meta.cover).is_none() {
+        let what = if book.meta.cover.is_empty() { "No ebook cover yet" } else { "The ebook cover image is missing" };
+        push(Level::Warn, format!("{what}: ebook stores need one (Book details)."));
     }
     if !book.smart_quotes {
         let straight = book.all_sections().filter(|(_, _, s)| s.text.contains('"')).count();
@@ -97,7 +109,7 @@ pub fn preflight(book: &Book, pages: usize) -> Vec<Check> {
 
 #[cfg(test)]
 mod tests {
-    use super::isbn_ok;
+    use super::{isbn_ok, preflight};
 
     #[test]
     fn isbn() {
@@ -107,5 +119,18 @@ mod tests {
         assert!(isbn_ok("0-8044-2957-X"));
         assert!(!isbn_ok("X-306-40615-2"));
         assert!(!isbn_ok("978-0-306-4061X-7"));
+    }
+
+    #[test]
+    fn pdfx_colour_note() {
+        let mut b = crate::sample::sample_book();
+        b.style.ornament_color = "#7d2f45".into();
+        (b.style.title_color, b.style.number_color, b.style.drop_cap_color) = ("#222222".into(), "#222222".into(), "#222222".into());
+        let cmyk = |b: &crate::model::Book| preflight(b, 100).iter().any(|c| c.text.contains("CMYK"));
+        assert!(!cmyk(&b));
+        b.print.pdfx = true;
+        assert!(cmyk(&b));
+        b.style.ornament_color = "#222222".into();
+        assert!(!cmyk(&b));
     }
 }
