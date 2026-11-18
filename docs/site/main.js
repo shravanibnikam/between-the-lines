@@ -56,7 +56,7 @@
       }
       setPrimary();
     })
-    .catch(() => {}); // The baked-in 0.1.0 links still work.
+    .catch(() => {}); // The baked-in links still work.
 
   /* ---------- Hero: the line typing between the two lines of the name ---------- */
   const line = $('#line');
