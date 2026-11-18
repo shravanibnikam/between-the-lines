@@ -97,7 +97,7 @@
 .demo-typewriter .tw-track:focus-within { border-color: #414148; }
 .demo-typewriter .tw-title {
   margin-bottom: 20px;
-  font: 400 27px/1.15 "EB Garamond", Georgia, serif;
+  font: 400 23px/1.15 "EB Garamond", Georgia, serif;
   font-variant-caps: small-caps; letter-spacing: .01em;
   color: var(--ink);
 }

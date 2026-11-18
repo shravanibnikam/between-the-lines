@@ -292,7 +292,7 @@
           Object.entries(MODES).map(([k, v], i) => `<button type="button" data-mode="${k}" aria-pressed="${!i}">${v}</button>`).join('') +
         '</div>' +
         '<div class="pv-nav">' +
-          '<span class="pv-size" data-sizes hidden><button type="button" class="pv-ib pv-a" data-size="-1" aria-label="Smaller text"><span>A</span>−</button>' +
+          '<span class="pv-size" data-sizes hidden><button type="button" class="pv-ib pv-a" data-size="-1" aria-label="Smaller text">A−</button>' +
           '<button type="button" class="pv-ib pv-a" data-size="1" aria-label="Larger text">A+</button></span>' +
           `<button type="button" class="pv-ib" data-step="-1">${CHEV('M10 3.5 5.5 8l4.5 4.5')}</button>` +
           '<span class="pv-at" data-at aria-live="polite" aria-atomic="true"></span>' +
@@ -358,9 +358,10 @@
       const b = book(mode), [l, r] = b.spreads[spread], n = b.pages.length;
       at.textContent = l && r ? `Pages ${l.n}–${r.n} of ${n}` : `Page ${(l || r).n} of ${n}`;
       label.textContent = `${ED[mode].name} · 6 × 9 in · ${n} pages`;
-      const extra = n - book('print').pages.length;
+      const story = x => x.pages.length - x.pages.findIndex(p => p.sec === 'ch0');
+      const pr = book('print'), extra = n - pr.pages.length;
       diff.hidden = mode !== 'large';
-      diff.textContent = `${extra >= 0 ? '+' : '−'}${Math.abs(extra)} pages over the print edition`;
+      diff.textContent = `${extra >= 0 ? '+' : '−'}${Math.abs(extra)} pages · the story runs ${story(b)} pages, ${story(pr)} in print`;
       prev.disabled = spread === 0; next.disabled = spread >= b.spreads.length - 1;
       prev.setAttribute('aria-label', 'Previous pages'); next.setAttribute('aria-label', 'Next pages');
     }
@@ -370,7 +371,7 @@
       const s = el('div', 'pv-spread' + (dir ? ' turn' : ''));
       if (dir) s.style.setProperty('--dir', dir);
       b.spreads[spread].forEach((p, i) => {
-        const slot = el('div', 'pv-slot ' + (i ? 'r' : 'v') + (p ? '' : ' none'));
+        const slot = el('div', 'pv-slot ' + (i ? 'rec' : 'v') + (p ? '' : ' none'));
         if (p) { slot.append(p.el); slot.setAttribute('aria-label', `Page ${p.n}${p.folio ? ', folio ' + p.folio : ''}`); slot.setAttribute('role', 'img'); }
         s.append(slot);
       });

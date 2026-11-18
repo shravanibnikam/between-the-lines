@@ -32,8 +32,9 @@
 }
 .demo-preview .pv-ib:hover:not(:disabled) { background: var(--raised); }
 .demo-preview .pv-ib:disabled { opacity: .4; cursor: default; }
-.demo-preview .pv-a { display: inline-flex; align-items: baseline; justify-content: center; width: auto; min-width: 36px; padding: 0 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
-.demo-preview .pv-a span { font-size: 11px; }
+.demo-preview .pv-a { width: auto; min-width: 36px; padding: 0 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.demo-preview .pv-a[data-size="-1"] { font-size: 11.5px; }
+.demo-preview .pv-a[data-size="1"] { font-size: 14.5px; }
 .demo-preview .pv-at { min-width: 9.5em; text-align: center; font-size: 13.5px; font-variant-numeric: tabular-nums; }
 
 .demo-preview .pv-label { margin: -2px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -56,7 +57,7 @@
 /* the spine: a faint shadow where the pages meet */
 .demo-preview .pv-slot::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
 .demo-preview .pv-slot.v::after { background: linear-gradient(to left, rgba(60, 45, 30, .18), rgba(60, 45, 30, 0) 7%); }
-.demo-preview .pv-slot.r::after { background: linear-gradient(to right, rgba(60, 45, 30, .2), rgba(60, 45, 30, 0) 7%); }
+.demo-preview .pv-slot.rec::after { background: linear-gradient(to right, rgba(60, 45, 30, .2), rgba(60, 45, 30, 0) 7%); }
 
 /* Thumbnails: the same pages, scaled down; the current one ringed in the ribbon colour. */
 .demo-preview .pv-thumbs {
@@ -138,7 +139,7 @@
 /* front matter */
 .demo-preview .tp { position: absolute; inset: 0; text-align: center; }
 .demo-preview .tp-top, .demo-preview .tp-a { position: absolute; left: 0; right: 0; }
-.demo-preview .tp-t { max-width: 92%; margin: 0 auto; font-family: var(--hf); font-size: 2.6em; line-height: 1.2; }
+.demo-preview .tp-t { max-width: 92%; margin: 0 auto; font-family: var(--hf); font-size: 2.2em; line-height: 1.2; }
 .demo-preview .tp.up .tp-t { letter-spacing: .06em; }
 .demo-preview .tp-s { margin: .35em 0 0; font-size: 1.3em; font-style: italic; }
 .demo-preview .tp .op-orn { margin: 1.4em auto 0; }
