@@ -174,38 +174,6 @@
     (document.fonts ? Promise.all([document.fonts.load('700 100px "DM Sans"'), document.fonts.load('600 10px "Source Code Pro"')]) : Promise.resolve()).then(build);
   }
 
-  /* ---------- Lightbox for the screenshots ---------- */
-  const dlg = $('[data-lb]');
-  if (dlg && dlg.showModal) {
-    const shots = $$('.plate img, .panel img, .ev img').map(img => {
-      const fig = img.closest('figure');
-      const title = img.closest('.mod')?.querySelector('h3')?.textContent
-        || img.closest('.stage')?.querySelector('b')?.textContent.replace(/,$/, '').replace(/^./, c => c.toUpperCase())
-        || 'See the printed page while you write';
-      const meta = fig.querySelector('figcaption')?.innerText.replace(/\s*\n\s*/g, ' · ') || 'Between the Lines · v0.1.0';
-      fig.setAttribute('data-shot', ''); fig.tabIndex = 0; fig.setAttribute('role', 'button');
-      fig.setAttribute('aria-label', `View larger: ${img.alt}`);
-      return { fig, src: img.currentSrc || img.src, alt: img.alt, title, meta };
-    });
-    let at = 0;
-    const show = i => {
-      at = (i + shots.length) % shots.length; const s = shots[at];
-      $('[data-lb-img]').src = s.src; $('[data-lb-img]').alt = s.alt;
-      $('[data-lb-title]').textContent = s.title; $('[data-lb-text]').textContent = s.alt + '.';
-      $('[data-lb-meta]').textContent = s.meta; $('[data-lb-count]').textContent = `${at + 1} / ${shots.length}`;
-    };
-    shots.forEach((s, i) => {
-      const open = () => { show(i); dlg.showModal(); };
-      s.fig.addEventListener('click', open);
-      s.fig.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-    });
-    $('[data-lb-prev]').addEventListener('click', () => show(at - 1));
-    $('[data-lb-next]').addEventListener('click', () => show(at + 1));
-    $$('[data-lb-close]', dlg).forEach(b => b.addEventListener('click', () => dlg.close()));
-    dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
-    dlg.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') show(at - 1); if (e.key === 'ArrowRight') show(at + 1); });
-  }
-
   /* ---------- The live page: 17 designs (core/src/themes.rs) ---------- */
   // [key, name, body face, heading face, pt, leading, numbers, title, colours, ornament, scene break, drop cap, options, trim]
   const D = [
@@ -244,20 +212,8 @@
     "By noon there were soldiers on the bridges, and by evening there were notices nailed to every door in the lower town. They were short, and the ink was still wet.",
   ];
 
-  const page = $('[data-page]'), chips = $('[data-chips]'), titleIn = $('[data-title]'), spec = $('[data-spec]');
-  if (!page) return;
   const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  let cur = D.findIndex(d => d.k === 'fantasy');
-  let first = opening;
   let fontsLoaded = false;
-
-  D.forEach((d, i) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'chip';
-    b.innerHTML = `${esc(d.n)} <small>${d.pt} pt</small>`;
-    b.addEventListener('click', () => set(i));
-    chips.append(b);
-  });
 
   function loadFonts() {
     if (fontsLoaded) return; fontsLoaded = true;
@@ -269,11 +225,10 @@
     document.head.append(l);
   }
 
-  function render() {
-    const d = D[cur], [tw, th] = d.trim || [5.5, 8.5];
-    const title = (titleIn.value.trim() || 'The River That Climbed');
-    const num = { none: '', roman: ROMAN[0], numeric: 'Chapter 1', written: 'Chapter ' + WORDS[0] }[d.num];
-    const st = page.style;
+  /* Shared with demos.js: page variables, a chapter head and an opening paragraph in any design. */
+  const trimOf = d => d.trim || [5.5, 8.5];
+  function setPageVars(el, d) {
+    const [tw, th] = trimOf(d), st = el.style;
     st.setProperty('--tw', tw); st.setProperty('--th', th); st.setProperty('--pt', d.pt); st.setProperty('--lead', d.l);
     st.setProperty('--ts', d.ts); st.setProperty('--tc', d.c || 'inherit'); st.setProperty('--numc', d.c || 'inherit');
     st.setProperty('--orn', d.oc || d.c || 'currentColor'); st.setProperty('--dcc', d.dcc || d.oc || d.c || 'inherit');
@@ -281,24 +236,47 @@
     st.setProperty('--align', d.rag ? 'left' : 'justify'); st.setProperty('--indent', d.block ? '0' : '1.2em');
     st.setProperty('--gapp', (d.block || 0) + 'em');
     st.fontFamily = `"${d.b}", Georgia, serif`;
-    page.classList.toggle('block', !!d.block);
-
-    const words = first.split(' ');
-    let open = esc(first);
-    if (d.dc || d.sc) {
-      const head = d.dc ? `<span class="dc">${esc(first[0])}</span>${esc(words[0].slice(1))}` : esc(words[0]);
-      const sc = d.sc ? `<span class="sc">${head} ${esc(words.slice(1, 3).join(' '))}</span> ${esc(words.slice(3).join(' '))}`
-        : `${head} ${esc(words.slice(1).join(' '))}`;
-      open = sc;
-    }
+    el.classList.toggle('block', !!d.block);
+  }
+  function headHTML(d, title, n = 1) {
+    const num = { none: '', roman: ROMAN[n - 1], numeric: 'Chapter ' + n, written: 'Chapter ' + WORDS[n - 1] }[d.num];
     const titleStyle = `font-family:&quot;${d.h}&quot;,Georgia,serif;${d.up ? 'text-transform:uppercase;letter-spacing:.04em;' : ''}${d.it ? 'font-style:italic;' : ''}`;
+    return `<div class="pg-head${d.left ? ' left' : ''}">` +
+      (d.orn ? `<span class="pg-orn" aria-hidden="true">${ORN[d.orn]}</span>` : '') +
+      (num ? `<span class="pg-num" style="font-family:&quot;${d.nf || d.h}&quot;,Georgia,serif">${num}</span>` : '') +
+      `<span class="pg-title" style="${titleStyle}">${esc(title)}</span>` +
+    `</div>`;
+  }
+  // The opening paragraph's drop cap and small caps; `ink` escapes (and may typeset) a run of text.
+  function openHTML(d, first, ink = esc) {
+    const words = first.split(' ');
+    if (!d.dc && !d.sc) return ink(first);
+    const head = d.dc ? `<span class="dc">${esc(first[0])}</span>${ink(words[0].slice(1))}` : ink(words[0]);
+    return d.sc ? `<span class="sc">${head} ${ink(words.slice(1, 3).join(' '))}</span> ${ink(words.slice(3).join(' '))}`
+      : `${head} ${ink(words.slice(1).join(' '))}`;
+  }
+  window.BTL = { D, ORN, esc, loadFonts, trimOf, setPageVars, headHTML, openHTML, onOpening: fn => listeners.add(fn) };
+
+  const page = $('[data-page]'), chips = $('[data-chips]'), titleIn = $('[data-title]'), spec = $('[data-spec]');
+  if (!page) return;
+  let cur = D.findIndex(d => d.k === 'fantasy');
+  let first = opening;
+
+  D.forEach((d, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip';
+    b.innerHTML = `${esc(d.n)} <small>${d.pt} pt</small>`;
+    b.addEventListener('click', () => set(i));
+    chips.append(b);
+  });
+
+  function render() {
+    const d = D[cur], [tw, th] = trimOf(d);
+    const title = (titleIn.value.trim() || 'The River That Climbed');
+    setPageVars(page, d);
     page.innerHTML =
-      `<div class="pg-head${d.left ? ' left' : ''}">` +
-        (d.orn ? `<span class="pg-orn" aria-hidden="true">${ORN[d.orn]}</span>` : '') +
-        (num ? `<span class="pg-num" style="font-family:&quot;${d.nf || d.h}&quot;,Georgia,serif">${num}</span>` : '') +
-        `<span class="pg-title" style="${titleStyle}">${esc(title)}</span>` +
-      `</div>` +
-      `<p class="first">${open}</p>` +
+      headHTML(d, title) +
+      `<p class="first">${openHTML(d, first)}</p>` +
       REST.slice(0, 2).map(p => `<p>${esc(p)}</p>`).join('') +
       `<div class="brk" aria-hidden="true">${d.brk}</div>` +
       REST.slice(2).map(p => `<p>${esc(p)}</p>`).join('') +

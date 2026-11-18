@@ -1,0 +1,174 @@
+/* World notes demo. Dark tokens from style.css; rule/control/track values from studio/DESIGN.md. */
+.demo-world {
+  --w-rule: #27272c;
+  --w-control: #414148;
+  --w-track: #4e2d3d;
+  container-type: inline-size;
+  font: 400 14px/20px var(--sans);
+  color: var(--ink);
+  text-align: left;
+}
+.demo-world * { box-sizing: border-box; }
+.demo-world .w {
+  display: grid;
+  grid-template-columns: minmax(230px, 40%) 1fr;
+  height: 440px;
+}
+.demo-world .w-sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+.demo-world .w-ico {
+  width: 16px; height: 16px; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+}
+.demo-world .w-num { font-variant-numeric: tabular-nums; }
+.demo-world button, .demo-world input, .demo-world select { font: inherit; color: inherit; margin: 0; }
+.demo-world button { cursor: pointer; }
+.demo-world :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+
+/* Left pane */
+.demo-world .w-side {
+  display: flex; flex-direction: column; min-height: 0;
+  padding: 16px 0 0 16px;
+  border-right: 1px solid var(--border);
+}
+.demo-world .w-top, .demo-world .w-chips, .demo-world .w-count, .demo-world .w-new { margin-right: 16px; }
+.demo-world .w-top { display: flex; gap: 8px; }
+.demo-world .w-search { position: relative; flex: 1; min-width: 0; }
+.demo-world .w-search .w-ico { position: absolute; left: 10px; top: 8px; color: var(--muted); pointer-events: none; }
+.demo-world input[type="text"], .demo-world input[type="search"], .demo-world select {
+  height: 32px; width: 100%; min-width: 0;
+  padding: 0 10px;
+  background: var(--ground);
+  border: 1px solid var(--w-control);
+  border-radius: 6px;
+}
+.demo-world input[type="search"] { padding-left: 32px; }
+.demo-world input::placeholder { color: var(--muted); opacity: 1; }
+.demo-world input:focus-visible, .demo-world select:focus-visible { outline-offset: 0; }
+.demo-world select { width: auto; flex: none; }
+
+.demo-world .w-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: none;
+  height: 32px; padding: 0 12px;
+  background: var(--ground);
+  border: 1px solid var(--w-control);
+  border-radius: 6px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.demo-world .w-btn:hover { background: var(--raised); }
+.demo-world .w-primary { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+.demo-world .w-primary:hover { background: #fff; }
+.demo-world button:active:not(:disabled) { transform: scale(.98); }
+
+.demo-world .w-new { display: flex; gap: 8px; margin-top: 8px; }
+.demo-world .w-new[hidden] { display: none; }
+
+.demo-world .w-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; }
+.demo-world .w-chip {
+  height: 28px; padding: 0 8px;
+  background: none; border: 0; border-radius: 4px;
+  font-weight: 500;
+}
+.demo-world .w-chip .w-num { color: var(--muted); font-weight: 400; }
+.demo-world .w-chip:hover { background: var(--raised); }
+.demo-world .w-chip[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand-ink); }
+.demo-world .w-chip[aria-pressed="true"] .w-num { color: var(--brand-ink); }
+.demo-world .w-count { margin: 8px 0 4px; font-size: 12px; color: var(--muted); }
+
+.demo-world .w-list {
+  list-style: none; margin: 0; padding: 0 16px 16px 0;
+  overflow-y: auto; min-height: 0; flex: 1;
+}
+.demo-world .w-list > li { border-bottom: 1px solid var(--w-rule); }
+.demo-world .w-list > li:first-child { border-top: 1px solid var(--w-rule); }
+.demo-world .w-row {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 8px 10px;
+  background: none; border: 0; border-radius: 0;
+  text-align: left;
+}
+.demo-world .w-row:hover { background: var(--raised); }
+.demo-world .w-row[aria-current="true"] { background: var(--brand-soft); }
+.demo-world .w-row[aria-current="true"] .w-name { color: var(--brand-ink); }
+.demo-world .w-row:focus-visible { outline-offset: -2px; }
+.demo-world .w-av {
+  display: grid; place-items: center; flex: none;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: oklch(0.28 0.05 var(--h));
+  color: oklch(0.85 0.08 var(--h));
+  font-weight: 500;
+}
+.demo-world .w-who { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.demo-world .w-name, .demo-world .w-kind { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.demo-world .w-name { font-weight: 500; }
+.demo-world .w-kind { font-size: 12px; line-height: 16px; color: var(--muted); }
+.demo-world .w-total { color: var(--muted); font-size: 13px; }
+.demo-world .w-empty { padding: 12px 0; color: var(--muted); border: 0 !important; }
+
+/* Right pane */
+.demo-world .w-detail { padding: 16px 20px 20px; overflow-y: auto; min-height: 0; }
+.demo-world .w-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.demo-world .w-title { margin: 0; font-size: 18px; line-height: 26px; font-weight: 600; overflow-wrap: anywhere; }
+.demo-world .w-pill {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
+  border-radius: 10px; background: var(--raised); color: var(--muted); font-size: 12px;
+}
+.demo-world .w-summary { margin: 6px 0 0; color: var(--muted); }
+.demo-world .w-sub { margin: 18px 0 8px; font-weight: 500; }
+.demo-world .w-sum { margin-left: 4px; color: var(--muted); font-size: 12px; font-weight: 400; }
+
+.demo-world .w-aliases { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.demo-world .w-alias {
+  display: inline-flex; align-items: center; gap: 2px;
+  height: 28px; padding: 0 2px 0 8px;
+  background: var(--raised); border-radius: 4px;
+}
+.demo-world .w-alias button {
+  display: grid; place-items: center; width: 24px; height: 24px;
+  background: none; border: 0; border-radius: 4px; color: var(--muted);
+}
+.demo-world .w-alias button .w-ico { width: 14px; height: 14px; }
+.demo-world .w-alias button:hover { color: var(--ink); background: var(--w-control); }
+.demo-world .w-addalias { display: flex; gap: 8px; max-width: 320px; }
+.demo-world .w-hint { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+
+.demo-world .w-mentions { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--w-rule); }
+.demo-world .w-mentions > li { border-bottom: 1px solid var(--w-rule); }
+.demo-world .w-ment {
+  display: grid; grid-template-columns: 1fr 64px 60px; align-items: center; gap: 12px;
+  width: 100%; min-height: 36px; padding: 6px 6px;
+  background: none; border: 0; text-align: left;
+}
+.demo-world .w-ment:hover:not(:disabled) { background: var(--raised); }
+.demo-world .w-ment:disabled { cursor: default; }
+.demo-world .w-ment:disabled .w-ch, .demo-world .w-ment:disabled .w-times { color: var(--muted); }
+.demo-world .w-ment[aria-expanded="true"] { background: var(--raised); }
+.demo-world .w-ment:focus-visible { outline-offset: -2px; }
+.demo-world .w-ch { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.demo-world .w-bar { height: 4px; border-radius: 2px; background: var(--w-track); overflow: hidden; }
+.demo-world .w-bar > span { display: block; height: 100%; background: var(--brand); transition: width .2s var(--ease); }
+.demo-world .w-times { text-align: right; color: var(--muted); font-size: 13px; }
+.demo-world .w-quote {
+  margin: 0; padding: 4px 6px 10px; background: var(--raised);
+  color: var(--muted); font-size: 13px; line-height: 20px;
+}
+.demo-world .w-quote mark { background: none; color: var(--brand); font-weight: 500; }
+
+@container (max-width: 560px) {
+  .demo-world .w { grid-template-columns: 1fr; height: auto; }
+  .demo-world .w-side { border-right: 0; border-bottom: 1px solid var(--border); padding-right: 0; }
+  .demo-world .w-list { max-height: 190px; flex: none; }
+  .demo-world .w-detail { overflow: visible; padding: 16px; }
+  .demo-world .w-ment { grid-template-columns: 1fr 40px 56px; gap: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-world .w-bar > span { transition: none; }
+  .demo-world button:active:not(:disabled) { transform: none; }
+}
+
+@media (pointer: coarse) {
+  .demo-world input[type="text"], .demo-world input[type="search"], .demo-world select { font-size: 16px; }
+}

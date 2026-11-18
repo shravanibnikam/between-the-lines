@@ -1,0 +1,139 @@
+/* Import demo: the app's Bookshelf in dark mode. Every rule is scoped to .demo-import. */
+.demo-import {
+  --imp-cover-w: 112px;
+  --imp-book: "EB Garamond", Georgia, serif;
+  --imp-caps: "Cinzel", "EB Garamond", Georgia, serif;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 18px 20px 20px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 400 14px/1.4 var(--sans);
+  text-align: left;
+}
+.demo-import p, .demo-import dl, .demo-import dd, .demo-import ul { margin: 0; padding: 0; }
+.demo-import ul { list-style: none; }
+.demo-import button { font: inherit; color: inherit; cursor: pointer; }
+.demo-import button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* Header: the shelf's figures, 12px muted labels over 24/400 tabular numbers, and the sample button. */
+.demo-import .imp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.demo-import .imp-figs { display: flex; border: 1px solid var(--border); border-radius: 10px; }
+.demo-import .imp-figs > div { min-width: 92px; padding: 8px 16px; }
+.demo-import .imp-figs > div + div { border-left: 1px solid var(--border); }
+.demo-import .imp-figs dt { font-size: 12px; color: var(--muted); }
+.demo-import .imp-figs dd { font-size: 24px; line-height: 32px; font-variant-numeric: tabular-nums; }
+.demo-import .imp-sample {
+  height: 36px; padding: 0 14px;
+  background: transparent; border: 1px solid var(--border); border-radius: 6px;
+  font-weight: 500;
+  transition: background-color .15s, border-color .15s, transform .15s var(--ease);
+}
+.demo-import .imp-sample:hover { background: var(--raised); border-color: #45454d; }
+.demo-import .imp-sample:active { transform: scale(.98); }
+
+/* Status line: the idle note, a success, a note about Word files, or an error with Retry. */
+.demo-import .imp-status { min-height: 20px; font-size: 13px; line-height: 20px; color: var(--muted); }
+.demo-import .imp-status.is-ok { color: var(--ink); }
+.demo-import .imp-status.is-error { color: #e5566f; }
+.demo-import .imp-retry {
+  padding: 0; border: 0; background: none;
+  color: var(--ink); font-weight: 500;
+  text-decoration: underline; text-underline-offset: .2em; text-decoration-color: var(--brand);
+}
+
+/* The shelf: one row of covers standing on a line; scrolls sideways when narrow. */
+.demo-import .imp-shelf {
+  display: flex; gap: 16px; align-items: flex-start;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity; scrollbar-width: thin;
+  padding-bottom: 4px;
+}
+.demo-import .imp-shelf > li { flex: 0 0 var(--imp-cover-w); min-width: 0; scroll-snap-align: start; }
+
+/* The drop tile: dashed like the app's "Start a new book", a real button over a hidden file input. */
+.demo-import .imp-drop-li { position: relative; }
+.demo-import .imp-drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; height: calc(var(--imp-cover-w) * 1.5 + 82px); padding: 12px;
+  background: transparent; border: 1px dashed #4a4a52; border-radius: 6px;
+  color: var(--muted); text-align: center;
+  transition: background-color .15s, border-color .15s, color .15s, transform .15s var(--ease);
+}
+.demo-import .imp-drop:hover { border-color: var(--muted); color: var(--ink); }
+.demo-import .imp-drop:active { transform: scale(.98); }
+.demo-import.is-over .imp-drop { border: 1px solid var(--brand); background: var(--brand-soft); color: var(--brand-ink); }
+.demo-import .imp-drop-t { font-size: 14px; font-weight: 500; line-height: 1.3; color: var(--ink); }
+.demo-import.is-over .imp-drop-t { color: var(--brand-ink); }
+.demo-import .imp-drop-s { font-size: 12px; }
+.demo-import .imp-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); opacity: 0; }
+
+/* A book: cover, then title, author and figures, as on the app's shelf. */
+.demo-import .imp-cover-box { position: relative; }
+.demo-import .imp-title {
+  margin-top: 10px; font-size: 14px; line-height: 20px; font-weight: 500;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.demo-import .imp-author { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.demo-import .imp-meta { margin-top: 2px; font-size: 12px; line-height: 18px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.demo-import .imp-missing { color: #6b6b73; }
+.demo-import .imp-pill {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 4px;
+  background: var(--raised); color: #d4d4d4; font-size: 12px; font-weight: 500;
+}
+
+/* The cover is a small real title page: paper, title in capitals, ornament, author, publisher. */
+.demo-import .imp-cover {
+  position: relative; aspect-ratio: 2 / 3; width: 100%; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 22% 9% 7%;
+  background: var(--paper); color: var(--paper-ink);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+.demo-import .imp-c-title {
+  font-family: var(--imp-caps); font-weight: 400; line-height: 1.18;
+  text-transform: uppercase; letter-spacing: .06em;
+  width: 100%; overflow-wrap: break-word;
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+}
+.demo-import .imp-c-sub { max-width: 100%; margin-top: 4px; font: italic 6px/1.25 var(--imp-book); }
+.demo-import .imp-c-orn { flex: none; margin-top: 8px; color: #6e5a45; }
+.demo-import .imp-c-author {
+  margin-top: auto; margin-bottom: auto; max-width: 100%;
+  font: 400 7px/1.2 var(--imp-caps); text-transform: uppercase; letter-spacing: .08em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.demo-import .imp-c-pub { margin-top: auto; font: 400 4.5px/1 var(--imp-book); text-transform: uppercase; letter-spacing: .12em; }
+.demo-import .imp-c-author + .imp-c-pub { margin-top: 0; }
+
+/* Remove: always there on touch, revealed on hover or focus where there's a pointer. */
+.demo-import .imp-remove {
+  position: absolute; top: 6px; right: 6px;
+  display: grid; place-items: center; width: 28px; height: 28px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--ink);
+  transition: opacity .15s, background-color .15s;
+}
+.demo-import .imp-remove:hover { background: var(--raised); }
+@media (hover: hover) {
+  .demo-import .imp-remove { opacity: 0; }
+  .demo-import .imp-book:hover .imp-remove, .demo-import .imp-remove:focus-visible { opacity: 1; }
+}
+
+/* A book arriving: it settles onto the shelf. */
+.demo-import .imp-book.is-new .imp-cover-box { animation: btl-import-place .45s var(--ease) both; }
+.demo-import .imp-book.is-new > p { animation: btl-import-fade .3s .12s var(--ease) both; }
+@keyframes btl-import-place { from { opacity: 0; transform: translateY(-18px) rotate(-3deg); } to { opacity: 1; transform: none; } }
+@keyframes btl-import-fade { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 480px) {
+  .demo-import { padding: 16px; }
+  .demo-import .imp-figs > div { min-width: 0; padding: 6px 12px; }
+  .demo-import .imp-status { min-height: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-import .imp-book.is-new .imp-cover-box, .demo-import .imp-book.is-new > p { animation: none; }
+  .demo-import * { transition: none; }
+}
