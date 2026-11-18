@@ -149,8 +149,25 @@ rest is a few Markdown-style lines:
 
 ## Get started
 
-There are no prebuilt downloads yet, so for now you build the app from source. It takes a few
-minutes.
+Download the latest version from the [Releases page](https://github.com/shravanibnikam/between-the-lines/releases/latest):
+
+| System | File |
+|---|---|
+| macOS (Apple silicon and Intel) | `Between.the.Lines_…_universal.dmg` |
+| Windows 10 and 11 | `Between.the.Lines_…_x64-setup.exe` (or the `.msi`) |
+| Linux | `.AppImage` (any distribution), `.deb` (Debian, Ubuntu) or `.rpm` (Fedora) |
+
+The app isn't signed with a paid developer certificate yet, so your system asks once before the
+first launch:
+
+- **macOS:** open the `.dmg` and drag the app to Applications, then open it. When macOS says it
+  can't check the app, open **System Settings → Privacy & Security**, scroll down and click
+  **Open Anyway**.
+- **Windows:** if SmartScreen says "Windows protected your PC", click **More info**, then
+  **Run anyway**.
+- **Linux:** make the AppImage executable (`chmod +x Between.the.Lines_*.AppImage`) and run it.
+
+### Build from source
 
 **You'll need:**
 
@@ -203,7 +220,7 @@ cd studio && npm run dev     # then open http://localhost:1420
 
 ## Roadmap
 
-Ideas for future versions, with no dates promised: prebuilt downloads, series, version branches,
+Ideas for future versions, with no dates promised: signed installers, series, version branches,
 cover templates with spine-width calculation, and more hyphenation and spelling languages. AI
 features are deliberately not on the list.
 
