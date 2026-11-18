@@ -1,0 +1,218 @@
+/* Typewriter, Dim and Focus demo: the Write screen's editor in dark mode. Every rule is scoped. */
+.demo-typewriter {
+  --tw-line: 27px; /* carriage line: 17px type at 1.6 */
+  --tw-lamp: 252 240 217; /* the app's lamp at its default brightness .8 and warmth .6, dark */
+  --tw-lamp-a: .256;
+  container-type: inline-size;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  height: clamp(360px, 70vw, 440px);
+  overflow: hidden;
+  background: var(--ground);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  font: 400 14px/20px var(--sans);
+  text-align: left;
+}
+
+/* Toolbar */
+.demo-typewriter .tw-bar {
+  grid-area: 1 / 1;
+  display: flex; align-items: center; gap: 8px;
+  height: 48px; padding: 0 8px 0 16px;
+  background: var(--ground);
+  border-bottom: 1px solid var(--border);
+  transition: opacity .3s;
+}
+.demo-typewriter .tw-crumb {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 13px; color: var(--muted);
+}
+.demo-typewriter .tw-crumb span { padding: 0 4px; opacity: .6; }
+.demo-typewriter .tw-tools { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.demo-typewriter .tw-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 10px;
+  background: transparent; border: 0; border-radius: 6px;
+  color: var(--muted);
+  font: 500 13px/1 var(--sans);
+  cursor: pointer;
+  transition: background-color .15s, color .15s, transform .1s;
+}
+.demo-typewriter .tw-toggle svg { flex: none; }
+.demo-typewriter .tw-toggle:hover { background: var(--raised); color: var(--ink); }
+.demo-typewriter .tw-toggle[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand-ink); }
+.demo-typewriter .tw-toggle:active { transform: scale(.98); }
+.demo-typewriter .tw-toggle:focus-visible,
+.demo-typewriter .tw-head:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+.demo-typewriter .tw-head:focus-visible { border-radius: 999px; }
+.demo-typewriter .tw-count {
+  margin-left: 8px; padding-right: 4px;
+  font-size: 13px; color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* Body: outline gutter beside the editor column */
+.demo-typewriter .tw-body { grid-area: 2 / 1; position: relative; display: flex; min-height: 0; }
+.demo-typewriter .tw-outline {
+  flex: none; width: 196px; padding: 16px 8px;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.demo-typewriter .tw-outline-h { margin: 0; padding: 0 8px 8px; font-size: 13px; color: var(--muted); }
+.demo-typewriter .tw-row {
+  display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  height: 32px; margin: 0 0 2px; padding: 0 8px;
+  border-radius: 6px;
+  font-size: 14px; color: var(--ink);
+}
+.demo-typewriter .tw-row > span:first-child,
+.demo-typewriter .tw-row > span:last-child { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.demo-typewriter .tw-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.demo-typewriter .tw-row.is-on { background: var(--brand-soft); color: var(--brand-ink); }
+.demo-typewriter .tw-row.is-on > span { color: var(--brand-ink); }
+
+/* The editor column and its page */
+.demo-typewriter .tw-stage {
+  position: relative; z-index: 1;
+  flex: 1 1 auto; min-width: 0;
+  overflow-x: hidden; overflow-y: auto;
+  scroll-behavior: auto;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  padding: 16px 16px 0;
+}
+.demo-typewriter .tw-track {
+  position: relative;
+  max-width: 620px; margin: 0 auto;
+  padding: 28px 40px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border); border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  transition: border-color .15s;
+}
+.demo-typewriter .tw-track:focus-within { border-color: #414148; }
+.demo-typewriter .tw-title {
+  margin-bottom: 20px;
+  font: 400 27px/1.15 "EB Garamond", Georgia, serif;
+  font-variant-caps: small-caps; letter-spacing: .01em;
+  color: var(--ink);
+}
+.demo-typewriter .tw-title span { display: block; margin-bottom: 6px; font: 400 13px/1 var(--sans); font-variant-caps: normal; color: var(--muted); }
+.demo-typewriter .tw-text {
+  font: 400 18px/1.6 "EB Garamond", Georgia, serif;
+  color: var(--ink);
+  caret-color: var(--brand);
+  white-space: pre-wrap; overflow-wrap: break-word;
+  outline: none;
+}
+.demo-typewriter .tw-text:focus-visible { outline: none; }
+.demo-typewriter .tw-text::selection,
+.demo-typewriter .tw-text ::selection { background: var(--brand-soft); color: var(--ink); }
+.demo-typewriter .tw-text > * { margin: 0 0 .6em; min-height: 1.6em; transition: opacity .15s; }
+.demo-typewriter.is-dim .tw-text > :not(.is-current) { opacity: .32; }
+.demo-typewriter .tw-caret {
+  position: absolute; top: 0; left: 0; width: 2px; margin-left: -1px;
+  background: var(--brand); border-radius: 1px; pointer-events: none;
+  animation: btl-tw-blink 1.06s steps(1) infinite;
+}
+@keyframes btl-tw-blink { 50% { opacity: 0; } }
+
+/* Focus: the chrome steps away, the page stays */
+.demo-typewriter.is-focus .tw-outline,
+.demo-typewriter.is-focus .tw-crumb { display: none; }
+
+/* Carriage (Focus + Typewriter): a desk, a rail at 70%, one unwrapped line per paragraph */
+.demo-typewriter .tw-desk,
+.demo-typewriter .tw-rail { display: none; }
+.demo-typewriter.is-carriage .tw-bar {
+  grid-area: 1 / 1; z-index: 3; align-self: start;
+  background: transparent; border-bottom-color: transparent;
+}
+.demo-typewriter.is-carriage.is-quiet .tw-bar { opacity: 0; pointer-events: none; }
+.demo-typewriter.is-carriage .tw-body { grid-area: 1 / 1 / 3 / 2; }
+.demo-typewriter.is-carriage .tw-desk {
+  display: block; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(118deg, #242428 0%, #1b1b1e 50%, #131315 100%);
+}
+.demo-typewriter.is-carriage .tw-desk::before,
+.demo-typewriter.is-carriage .tw-desk::after { content: ""; position: absolute; left: 0; right: 0; }
+/* the lamp: a beam widening upward from the type head, and a short spill below the rail */
+.demo-typewriter.is-carriage .tw-desk::before {
+  bottom: 30%; height: calc(var(--tw-line) * 5 + 40px);
+  background:
+    radial-gradient(ellipse 120px 50px at 50% 100%, rgb(var(--tw-lamp) / calc(var(--tw-lamp-a) * 1.25)) 0%, transparent 72%),
+    conic-gradient(from -50deg at 50% calc(100% + 70px), transparent 0deg, rgb(var(--tw-lamp) / calc(var(--tw-lamp-a) * .5)) 14deg, rgb(var(--tw-lamp) / calc(var(--tw-lamp-a) * 1.2)) 32deg, rgb(var(--tw-lamp) / calc(var(--tw-lamp-a) * 1.2)) 68deg, rgb(var(--tw-lamp) / calc(var(--tw-lamp-a) * .5)) 86deg, transparent 100deg);
+  -webkit-mask-image: radial-gradient(ellipse 60% 100% at 50% 100%, #000 0%, rgb(0 0 0 / .85) 35%, rgb(0 0 0 / .4) 65%, transparent 95%);
+  mask-image: radial-gradient(ellipse 60% 100% at 50% 100%, #000 0%, rgb(0 0 0 / .85) 35%, rgb(0 0 0 / .4) 65%, transparent 95%);
+}
+.demo-typewriter.is-carriage .tw-desk::after {
+  top: 70%; bottom: 0;
+  background: radial-gradient(ellipse min(40%, 220px) 46% at 50% 0%, rgb(var(--tw-lamp) / calc(var(--tw-lamp-a) * .55)) 0%, transparent 75%);
+}
+.demo-typewriter.is-carriage .tw-rail {
+  display: block; position: absolute; left: 0; right: 0; top: 70%; z-index: 2;
+  height: 2px; background: #34343a; box-shadow: 0 1px 0 rgb(255 255 255 / .04);
+  pointer-events: none;
+}
+.demo-typewriter.is-carriage .tw-stage {
+  padding: 0;
+  overflow: hidden; overflow: clip;
+  -webkit-mask-image:
+    linear-gradient(to bottom, transparent 6%, rgb(0 0 0 / .14) 32%, rgb(0 0 0 / .42) calc(70% - var(--tw-line) - 14px), #000 calc(70% - var(--tw-line) - 6px), #000 calc(70% + 2px), transparent calc(70% + 12px)),
+    linear-gradient(to right, transparent 3%, #000 30%, #000 78%, transparent 97%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to bottom, transparent 6%, rgb(0 0 0 / .14) 32%, rgb(0 0 0 / .42) calc(70% - var(--tw-line) - 14px), #000 calc(70% - var(--tw-line) - 6px), #000 calc(70% + 2px), transparent calc(70% + 12px)),
+    linear-gradient(to right, transparent 3%, #000 30%, #000 78%, transparent 97%);
+  mask-composite: intersect;
+}
+.demo-typewriter.is-carriage .tw-track {
+  position: absolute; top: 0; left: 0;
+  width: max-content; max-width: none; margin: 0; padding: 0;
+  background: none; border: 0; border-radius: 0;
+  transition: transform 90ms ease-out; will-change: transform;
+}
+.demo-typewriter.is-carriage .tw-title { display: none; }
+.demo-typewriter.is-carriage .tw-text {
+  font: 400 17px/var(--tw-line) Courier, "Courier New", var(--mono);
+  color: var(--ink);
+}
+.demo-typewriter.is-carriage .tw-text > * { white-space: pre; margin: 0 0 .6em; min-height: var(--tw-line); }
+.demo-typewriter .tw-head { display: none; }
+.demo-typewriter.is-carriage .tw-head:not([hidden]) {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  position: absolute; z-index: 4; top: calc(70% + 1px); left: calc(50% - 10px);
+  width: 54px; height: 22px; padding: 0;
+  transform: translateY(-50%);
+  background: #2a2a2f; border: 1px solid rgb(255 255 255 / .1); border-radius: 999px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / .28), 0 0 22px 2px rgb(var(--tw-lamp) / calc(var(--tw-lamp-a) * 1.1));
+  cursor: pointer;
+}
+.demo-typewriter .tw-head:hover { background: #333339; }
+.demo-typewriter .tw-head i { width: 5px; height: 5px; border-radius: 50%; background: rgb(255 255 255 / .25); }
+.demo-typewriter .tw-head i:last-child { background: var(--brand); }
+
+/* Narrow: no gutter, tighter page and toolbar */
+@container (max-width: 640px) {
+  .demo-typewriter .tw-outline,
+  .demo-typewriter .tw-crumb { display: none; }
+}
+@container (max-width: 480px) {
+  .demo-typewriter .tw-bar { padding: 0 6px; }
+  .demo-typewriter .tw-toggle { padding: 0 8px; gap: 5px; }
+  .demo-typewriter .tw-count { margin-left: 4px; }
+  .demo-typewriter .tw-stage { padding: 12px 12px 0; }
+  .demo-typewriter .tw-track { padding: 20px 18px 16px; }
+  .demo-typewriter .tw-title { font-size: 23px; margin-bottom: 14px; }
+  .demo-typewriter .tw-text { font-size: 17px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-typewriter *,
+  .demo-typewriter *::before,
+  .demo-typewriter *::after { transition: none !important; animation: none !important; }
+}

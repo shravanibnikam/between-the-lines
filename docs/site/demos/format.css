@@ -1,0 +1,93 @@
+/* "While you write": a dark editor beside the same text set as a printed page. */
+.demo-format { container-type: inline-size; padding: 16px; color: var(--ink); font: 400 14px/20px var(--sans); }
+.demo-format .fmt { display: grid; gap: 16px; }
+.demo-format .fmt-ed, .demo-format .fmt-out { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+
+.demo-format .fmt-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; color: var(--muted); font-size: 13px; }
+.demo-format .fmt-bar label { color: var(--ink); font-weight: 500; }
+.demo-format .fmt-out .fmt-bar > :first-child { color: var(--ink); font-weight: 500; }
+
+.demo-format textarea {
+  display: block; width: 100%; height: 220px; flex: 1 1 auto; margin: 0; resize: none;
+  padding: 14px 16px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--ground); color: var(--ink); caret-color: var(--brand);
+  font: 400 13px/1.65 var(--mono); tab-size: 4;
+}
+.demo-format textarea:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.demo-format textarea::selection { background: var(--brand-soft); color: var(--ink); }
+
+.demo-format .fmt-try { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.demo-format .fmt-try > span { color: var(--muted); font-size: 13px; margin-right: 2px; }
+.demo-format button {
+  height: 28px; padding: 0 10px; border: 1px solid #414148; border-radius: 6px;
+  background: var(--surface); color: var(--ink); font: 500 13px/1 var(--sans); cursor: pointer;
+  transition: background-color .15s var(--ease), transform .1s var(--ease);
+}
+.demo-format button:hover { background: var(--raised); }
+.demo-format button:active { transform: scale(.98); }
+.demo-format button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.demo-format .fmt-reset { border-color: transparent; background: none; color: var(--muted); padding: 0 6px; }
+.demo-format .fmt-reset:hover { color: var(--ink); background: var(--raised); }
+
+/* The page: a fragment of a printed book. */
+.demo-format .fmt-paper {
+  position: relative; height: 380px; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain;
+  padding: 28px clamp(20px, 6%, 40px) 32px; border-radius: 4px;
+  background: var(--paper); color: var(--paper-ink);
+  font: 400 15.5px/1.45 "EB Garamond", Georgia, serif;
+  font-variant-numeric: oldstyle-nums; font-kerning: normal; font-feature-settings: "liga", "kern";
+  hyphens: auto; -webkit-hyphens: auto; text-rendering: optimizeLegibility;
+}
+.demo-format .fmt-paper:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.demo-format .fmt-paper ::selection { background: #e7c3d3; color: var(--paper-ink); }
+.demo-format .fmt-paper p { margin: 0; text-align: justify; }
+.demo-format .fmt-paper > p + p { text-indent: 1.2em; }
+.demo-format .fmt-paper strong { font-weight: 600; }
+.demo-format .fmt-call { font-size: .68em; line-height: 0; vertical-align: .55em; margin-left: .05em; font-variant-numeric: lining-nums; }
+.demo-format .fmt-empty { color: #7a7268; font-style: italic; text-align: left; }
+
+.demo-format .fmt-h2, .demo-format .fmt-h3 { font-weight: 500; line-height: 1.25; text-align: left; hyphens: manual; }
+.demo-format .fmt-h2 { font-size: 1.4em; margin: 0 0 .8em; }
+.demo-format .fmt-h3 { font-size: 1.1em; font-style: italic; margin: 1.1em 0 .4em; }
+.demo-format .fmt-paper > :first-child { margin-top: 0; }
+
+.demo-format blockquote { margin: .8em 2em; font-size: .92em; line-height: 1.4; text-align: justify; hyphens: auto; }
+.demo-format .fmt-brk { margin: .7em 0; text-align: center; color: #6b5a43; font-size: 1.35em; line-height: 1; }
+
+.demo-format figure { margin: 1em 0; text-align: center; }
+.demo-format .fmt-ph {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  aspect-ratio: 16 / 7; width: 82%; margin: 0 auto; border: 1px solid rgb(43 39 35 / .22); border-radius: 2px;
+  background: rgb(43 39 35 / .05); color: rgb(43 39 35 / .45);
+}
+.demo-format .fmt-ph span { font: 400 12px/1.3 var(--mono); overflow-wrap: anywhere; padding: 0 8px; }
+.demo-format figcaption { margin-top: .45em; font-size: .85em; font-style: italic; line-height: 1.35; text-align: center; }
+
+.demo-format .fmt-tbl { margin: .8em 0; overflow-x: auto; }
+.demo-format table { margin: 0 auto; border-collapse: collapse; font-size: .92em; line-height: 1.3; font-variant-numeric: lining-nums tabular-nums; }
+.demo-format th, .demo-format td { padding: .2em .8em; }
+.demo-format th { font-weight: 400; font-variant-caps: all-small-caps; letter-spacing: .04em; border-bottom: 1px solid rgb(43 39 35 / .45); }
+.demo-format thead + tbody tr:first-child td { padding-top: .35em; }
+.demo-format tbody tr:last-child td { padding-bottom: .3em; border-bottom: 1px solid rgb(43 39 35 / .45); }
+.demo-format .fmt-l { text-align: left; }
+.demo-format .fmt-c { text-align: center; }
+.demo-format .fmt-r { text-align: right; }
+
+/* Footnotes at the foot, under a short rule. */
+.demo-format .fmt-notes { margin-top: 1.4em; padding-top: .5em; position: relative; font-size: .8em; line-height: 1.35; }
+.demo-format .fmt-notes::before { content: ""; position: absolute; top: 0; left: 0; width: 4.5em; border-top: 1px solid rgb(43 39 35 / .55); }
+.demo-format .fmt-notes p { text-indent: 0; padding-left: 1.2em; }
+.demo-format .fmt-notes p + p { margin-top: .25em; }
+.demo-format .fmt-nn { display: inline-block; width: 1.2em; margin-left: -1.2em; font-variant-numeric: lining-nums; }
+
+/* Side by side when there is room. */
+@container (min-width: 640px) {
+  .demo-format .fmt { grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); height: 436px; }
+  .demo-format textarea { height: auto; min-height: 0; }
+  .demo-format .fmt-paper { height: auto; min-height: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-format button { transition: none; }
+  .demo-format button:active { transform: none; }
+}

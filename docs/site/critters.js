@@ -170,7 +170,7 @@
       const rg = document.createRange(); rg.selectNodeContents(el);
       for (const r of rg.getClientRects()) add(r, 16);
     });
-    document.querySelectorAll('.nav, .carriage, .btn, .plate, .panel, .ev, .tree, .designs, .download, .mark-ascii, .figures > div').forEach(el => add(el.getBoundingClientRect(), 10));
+    document.querySelectorAll('.nav, .carriage, .btn, .plate, .panel, .ev, [data-ui], .tree, .designs, .download, .mark-ascii, .figures > div').forEach(el => add(el.getBoundingClientRect(), 10));
     holes = next;
   }
   const inHole = (x, y) => holes.some(h => x > h[0] && x < h[2] && y > h[1] && y < h[3]);
@@ -269,7 +269,7 @@
 
   // Click on empty page: a butterfly takes off from there.
   addEventListener('click', e => {
-    if (reduce || e.target.closest('a, button, input, label, canvas[data-ascii-mark], .designs, figure, dialog')) return;
+    if (reduce || e.target.closest('a, button, input, select, textarea, label, [contenteditable], canvas[data-ascii-mark], .designs, figure, [data-ui]')) return;
     things.push({ k: 'fly', x: e.clientX, y: e.clientY + scrollY, a: -Math.PI / 2 + (rnd() - .5), sp: 1.6, v: (rnd() * 3) | 0, home: e.clientY + scrollY - 160, S: 40 });
   });
 
@@ -287,7 +287,7 @@
 
   if (!fine || reduce) return;
 
-  /* ---------- Magnetic buttons, tilting pictures ---------- */
+  /* ---------- Magnetic buttons, tilting pictures (not the demos: tilt fights clicking and typing) ---------- */
   document.querySelectorAll('.btn, .cell, .chip').forEach(b => {
     b.addEventListener('pointermove', e => {
       const r = b.getBoundingClientRect();
@@ -295,7 +295,7 @@
     });
     b.addEventListener('pointerleave', () => { b.style.translate = ''; });
   });
-  document.querySelectorAll('.panel, .page-wrap, .ev').forEach(p => {
+  document.querySelectorAll('.page-wrap, .tree').forEach(p => {
     p.addEventListener('pointermove', e => {
       const r = p.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
       p.style.transform = `perspective(1200px) rotateY(${x * 5}deg) rotateX(${-y * 5}deg)`;
@@ -324,9 +324,9 @@
       document.body.append(l);
       lastX = px; lastY = py;
     }
-    const t = e.target, field = t.closest('input, textarea');
+    const t = e.target, field = t.closest('input, textarea, [contenteditable]');
     document.documentElement.classList.toggle('cur-text', !!field);
-    ringEl.classList.toggle('hot', !field && !!t.closest('a, button, .chip, [data-shot], canvas[data-ascii-mark], .ltr'));
+    ringEl.classList.toggle('hot', !field && !!t.closest('a, button, select, .chip, canvas[data-ascii-mark], .ltr'));
   }, { passive: true });
   addEventListener('pointerdown', () => ringEl.classList.add('down'));
   addEventListener('pointerup', () => ringEl.classList.remove('down'));
